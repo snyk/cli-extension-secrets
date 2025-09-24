@@ -1,0 +1,19 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: cli-extension-secrets
+  description: An extension to the Snyk CLI for Secrets Scanning
+  annotations:
+    github.com/project-slug: snyk/cli-extension-secrets
+    circleci.com/project-slug: github/snyk/cli-extension-secrets
+    github.com/team-slug: snyk/iac
+    snyk.io/jira-prefix: PS
+    # 1 - An asset which contains bulk customer information.
+    # 2 - An asset which if compromised would cause an availability issue OR contains transient customer information.
+    # 3 - An asset which contains proprietary (not customer) information.
+    # 4 - An asset which contains neither customer nor proprietary information.
+    snyk.io/criticality: "4"
+spec:
+  type: snyk-cli-plugin
+  lifecycle: "-"
+  owner: iac
