@@ -1,0 +1,48 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.7.1
+  prodsec: snyk/prodsec-orb@1
+
+base_image: &base_image
+  resource_class: small
+  docker:
+    - image: cimg/go:1.24
+
+jobs:
+  unit-test:
+    <<: *base_image
+    steps:
+      - checkout
+      - run: go test ./...
+  lint:
+    <<: *base_image
+    steps:
+      - checkout
+      - run: golangci-lint run ./...
+
+  security-scans:
+    <<: *base_image
+    steps:
+      - checkout
+      - prodsec/security_scans:
+          mode: auto
+
+workflows:
+  version: 2
+  CI:
+    jobs:
+      - prodsec/secrets-scan:
+          name: Scan repository for secrets
+          context:
+            - snyk-bot-slack
+          channel: iac-plus-alerts
+          trusted-branch: main
+      - security-scans:
+          name: Security Scans
+          context:
+            - analysis-iac
+      - unit-test:
+          name: Unit Test
+      - lint:
+          name: Linting

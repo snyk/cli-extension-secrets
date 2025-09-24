@@ -1,0 +1,5 @@
+- repo: https://github.com/zricethezav/gitleaks
+  rev: v8.20.1
+  hooks:
+    - id: gitleaks
+      stages: [commit]
