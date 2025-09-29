@@ -1,0 +1,7 @@
+.bin
+
+### Go Patch ###
+/vendor/
+/Godeps/
+
+.idea

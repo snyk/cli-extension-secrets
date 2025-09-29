@@ -24,10 +24,10 @@ linters-settings:
   gocyclo:
     min-complexity: 15
   gofumpt:
-    module-path: github.com/snyk/go-service-sample
+    module-path: github.com/snyk/cli-extension-secrets
     extra-rules: true
   goimports:
-    local-prefixes: github.com/snyk/go-service-sample
+    local-prefixes: github.com/snyk/cli-extension-secrets
   gosimple:
     checks: ["all"]
   govet:
@@ -59,6 +59,7 @@ linters-settings:
       - name: error-strings
       - name: error-naming
       - name: exported
+        disable-stuttering-check: true
       - name: if-return
       - name: increment-decrement
       - name: var-naming
@@ -78,9 +79,6 @@ linters-settings:
       - name: redefines-builtin-id
   staticcheck:
     checks: ["all"]
-  stylecheck:
-    checks: ["all"]
-    http-status-code-whitelist: []
 
 linters:
   enable:
@@ -96,13 +94,14 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
+    - copyloopvar
     - forbidigo
     - forcetypeassert
     - goconst
     - gocritic
     - gocyclo
     - godot
+    - gofmt
     - gofumpt
     - goimports
     - goprintffuncname
@@ -116,34 +115,55 @@ linters:
     - nilerr
     - nilnil
     - noctx
-    - nolintlint
     - prealloc
     - predeclared
     - promlinter
     - revive
     - rowserrcheck
     - sqlclosecheck
-    - stylecheck
+    - staticcheck
     - tagliatelle
-    - tenv
     - testpackage
     - thelper
     - tparallel
     - unconvert
     - unparam
     - usestdlibvars
-    - wastedassign
+    - usetesting
     - whitespace
     - wrapcheck
 
 issues:
+  # List of regexps of files that should be excluded from all linters.
+  # The filenames are checked against the full path.
+  exclude-dirs:
+    # Exclude vendor directory
+    - vendor
+    # Exclude Go module cache (for when the linter incorrectly checks it)
+    - pkg/mod
   exclude-rules:
+    # Exclude specific linters for all Go test files
     - path: _test\.go
       linters:
-        - bodyclose
-        - forcetypeassert
+        - funlen
+        - gocyclo
+        - dupl
         - goconst
         - ireturn
-    - path: test/
-      linters:
         - testpackage
+        - errcheck
+        - forcetypeassert
+        - wrapcheck
+        - nolintlint
+    - path: test_helpers.go
+      linters:
+        - funlen
+        - gocyclo
+        - dupl
+        - goconst
+        - ireturn
+        - testpackage
+        - errcheck
+        - forcetypeassert
+        - wrapcheck
+        - nolintlint
