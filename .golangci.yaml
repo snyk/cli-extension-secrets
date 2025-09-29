@@ -24,10 +24,10 @@ linters-settings:
   gocyclo:
     min-complexity: 15
   gofumpt:
-    module-path: github.com/snyk/go-service-sample
+    module-path: github.com/snyk/cli-extension-secrets
     extra-rules: true
   goimports:
-    local-prefixes: github.com/snyk/go-service-sample
+    local-prefixes: github.com/snyk/cli-extension-secrets
   gosimple:
     checks: ["all"]
   govet:
@@ -96,7 +96,6 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exportloopref
     - forbidigo
     - forcetypeassert
     - goconst
