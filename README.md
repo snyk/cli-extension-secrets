@@ -11,3 +11,7 @@ This module implements the Snyk CLI Extension for Secrets workflows.
 ## Workflows
 
 - `snyk secrets test`
+
+## Contributing
+
+This repository is closed to public contributions.
