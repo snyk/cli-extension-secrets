@@ -8,7 +8,7 @@ import (
 func DetermineInputPaths(args []string, cwd string) []string {
 	paths := []string{}
 	for _, arg := range args {
-		isCommand := slices.Contains([]string{"iac", "test"}, arg)
+		isCommand := slices.Contains([]string{"secrets", "test"}, arg)
 		isFlag := strings.HasPrefix(arg, "-")
 		if !isCommand && !isFlag {
 			paths = append(paths, arg)

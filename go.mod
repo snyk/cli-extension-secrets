@@ -61,7 +61,7 @@ require (
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/snyk/code-client-go v1.23.6 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20250812140843-a01d75260003 // indirect
+	github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect

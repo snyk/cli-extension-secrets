@@ -6,11 +6,17 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
+)
+
+const (
+	FeatureFlagIsSecretsEnabled = "feature_flag_is_secrets_enabled"
 )
 
 var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
@@ -24,8 +30,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 		return fmt.Errorf("error while registering %s workflow: %w", WorkflowID, err)
 	}
 
-	// TODO: add the feature flag required to gate the secrets test feature, similar to below:
-	// https://github.com/snyk/cli-extension-os-flows/blob/d279e5c83acaf21f3c6a2ba4849ffe8e274b577b/internal/commands/ostest/workflow.go#L70-L76
+	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsSecretsEnabled, "isSecretsEnabled")
 	return nil
 }
 
@@ -36,25 +41,22 @@ func SecretsWorkflow(
 	config := ictx.GetConfiguration()
 	logger := ictx.GetEnhancedLogger()
 
-	// TODO: check the feature flag for secrets and return some error if not enabled (?)
-	// https://github.com/snyk/cli-extension-os-flows/blob/d279e5c83acaf21f3c6a2ba4849ffe8e274b577b/internal/commands/ostest/workflow.go#L133-L135
+	if err := checkSecretsEnabled(config); err != nil {
+		return nil, err
+	}
 
 	// TODO: validate the flags
 	// 1. project related flags can only be used in combination with --report
 	// 2. here we can also return an error if a flag is unsupported in closed beta
 	// https://github.com/snyk/cli-extension-iac/blob/main/internal/commands/iactest/iactest.go#L72
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
-		logger.Error().Msg("no org provided")
-		return nil, nil // TODO: error handling
-	}
 
 	// TODO: determine the input paths (default is .)
 	// should we be able to scan multiple inputs?
 	args := os.Args[1:]
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
+		logger.Error().Err(err).Msg("failed to read the current directory")
+		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
 
@@ -63,11 +65,13 @@ func SecretsWorkflow(
 	// 2. for the test-api-shim
 	uploadClient, err := upload.NewClient(ictx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create upload client: %w", err)
+		logger.Error().Err(err).Msg("failed to create upload client")
+		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
 	}
 	testShimClient, err := testshim.NewClient(ictx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create test shim client: %w", err)
+		logger.Error().Err(err).Msg("failed to create test shim client")
+		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
 	}
 
 	// TODO: here we need to pass all required clients (uploadapi, testshim)
@@ -75,10 +79,21 @@ func SecretsWorkflow(
 	ctx := context.Background()
 	err = runWorkflow(ctx, testShimClient, uploadClient, inputPaths, logger)
 	if err != nil {
-		return nil, err // TODO: error handling
+		logger.Error().Err(err).Msg("workflow execution failed")
+		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
 	}
 
 	return nil, nil
+}
+
+func checkSecretsEnabled(config configuration.Configuration) error {
+	// TODO: remove this after we're moving away from CB
+	// and add different checks for settings/entitlement (with different error as well)
+	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
+		return cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag.")
+	}
+
+	return nil
 }
 
 //nolint:unparam // TODO: remove this after adding the implem
