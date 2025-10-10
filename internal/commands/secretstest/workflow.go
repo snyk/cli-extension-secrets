@@ -45,10 +45,16 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	// TODO: validate the flags
-	// 1. project related flags can only be used in combination with --report
-	// 2. here we can also return an error if a flag is unsupported in closed beta
-	// https://github.com/snyk/cli-extension-iac/blob/main/internal/commands/iactest/iactest.go#L72
+	orgID := config.GetString(configuration.ORGANIZATION)
+	if orgID == "" {
+		logger.Error().Msg("no org provided")
+		return nil, nil // TODO: error handling
+	}
+
+	err := validateFlagsConfig(config)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: determine the input paths (default is .)
 	// should we be able to scan multiple inputs?
