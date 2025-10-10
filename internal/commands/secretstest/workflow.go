@@ -45,6 +45,11 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
+	// This will be removed after we enable the SCM Flows
+	if config.IsSet(FlagReport) {
+		return nil, cli_errors.NewFeatureUnderDevelopmentError("Flag --report is not yet supported.")
+	}
+
 	orgID := config.GetString(configuration.ORGANIZATION)
 	if orgID == "" {
 		logger.Error().Msg("no org provided")
