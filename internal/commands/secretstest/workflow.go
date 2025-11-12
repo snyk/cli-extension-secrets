@@ -13,6 +13,7 @@ import (
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
+	"github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 const (
@@ -70,6 +71,16 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
+	// Find all the files from the input paths
+	allFiles, err := FindAllFiles(inputPaths)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to find all files from the provided paths")
+		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
+	}
+
+	// Filter the files before upload
+	filter := filefilter.NewFileFilter()
+	filteredFiles := filter.Filter(ToFileFilterList(allFiles))
 
 	// TODO: setup the clients
 	// 1. for the upload api

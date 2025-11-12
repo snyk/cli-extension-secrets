@@ -3,7 +3,10 @@ module github.com/snyk/cli-extension-secrets
 go 1.24.0
 
 require (
+	github.com/golang/mock v1.6.0
+	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
+	github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485
 	github.com/snyk/go-application-framework v0.0.0-20250922111038-7c7521b077e1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
@@ -29,8 +32,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/gofrs/flock v0.12.1 // indirect
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
-	github.com/golang/mock v1.6.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
@@ -61,7 +62,6 @@ require (
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/snyk/code-client-go v1.23.6 // indirect
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485 // indirect
 	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect

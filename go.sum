@@ -165,8 +165,6 @@ github.com/skeema/knownhosts v1.3.1 h1:X2osQ+RAjK76shCbvhHHHVl3ZlgDm8apHEHFqRjnB
 github.com/skeema/knownhosts v1.3.1/go.mod h1:r7KTdC8l4uxWRyK2TpQZ/1o5HaSzh06ePQNxPwTcfiY=
 github.com/snyk/code-client-go v1.23.6 h1:L9fy6ihF9hETPzHmlWOcLXLjj7paBw6fa1HodyCUra8=
 github.com/snyk/code-client-go v1.23.6/go.mod h1:3d9rtr06j239obFmF7Ojl9KybivOTR3lz0vsmDNPsRI=
-github.com/snyk/error-catalog-golang-public v0.0.0-20250812140843-a01d75260003 h1:qeXih9sVe/WvhccE3MfEgglnSVKN1xTQBcsA/N96Kzo=
-github.com/snyk/error-catalog-golang-public v0.0.0-20250812140843-a01d75260003/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485 h1:4cYwZIvqN4hATJMU3kUQwd5hJ9r9Lyt1OUw5egIGRGw=
 github.com/snyk/error-catalog-golang-public v0.0.0-20251006093240-2d9cc5458485/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/go-application-framework v0.0.0-20250922111038-7c7521b077e1 h1:gIs6Nh7MlBgpbV/O5E6/1RTW4OG+zY+LdvaNO7RqwOw=

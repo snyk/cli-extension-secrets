@@ -1,8 +1,13 @@
 package secretstest
 
 import (
+	"io/fs"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 func DetermineInputPaths(args []string, cwd string) []string {
@@ -18,4 +23,69 @@ func DetermineInputPaths(args []string, cwd string) []string {
 		paths = append(paths, cwd)
 	}
 	return paths
+}
+
+type LocalFile struct {
+	Path string
+	Info os.FileInfo
+}
+
+func FindAllFiles(paths []string) ([]LocalFile, error) {
+	allFiles := make([]LocalFile, 0, len(paths))
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			// Skip paths that don't exist
+			if os.IsNotExist(err) {
+				continue
+			}
+
+			return nil, err
+		}
+		if !info.IsDir() {
+			allFiles = append(allFiles, LocalFile{
+				Path: path,
+				Info: info,
+			})
+			continue
+		}
+		// Walk this directory and collect files
+		walkErr := filepath.WalkDir(path, func(walkPath string, d fs.DirEntry, err error) error {
+			// Check for an error passed by WalkDir (e.g., permission denied)
+			if err != nil {
+				return err
+			}
+			// We only want files, so if it's a directory, we skip adding it
+			if d.IsDir() {
+				return nil
+			}
+
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+
+			allFiles = append(allFiles, LocalFile{
+				Path: walkPath,
+				Info: info,
+			})
+			return nil
+		})
+		if walkErr != nil {
+			return nil, walkErr
+		}
+	}
+	return allFiles, nil
+}
+
+func ToFileFilterList(files []LocalFile) []filefilter.LocalFile {
+	ffList := make([]filefilter.LocalFile, len(files))
+	for i, file := range files {
+		// Manually copy the fields to create the new type
+		ffList[i] = filefilter.LocalFile{
+			Path: file.Path,
+			Info: file.Info,
+		}
+	}
+	return ffList
 }
