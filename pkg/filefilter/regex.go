@@ -2,12 +2,12 @@ package filefilter
 
 import "regexp"
 
-type RegexFilter struct {
+type regexFilter struct {
 	patterns []*regexp.Regexp
 }
 
-func NewRegexFilter() Filter {
-	rf := &RegexFilter{}
+func RegexPathFilter() FileFilter {
+	rf := &regexFilter{}
 	rf.patterns = []*regexp.Regexp{
 		regexp.MustCompile(`go\.(?:mod|sum|work(?:\.sum)?)$`), // Go module files (mod, sum, work)
 		regexp.MustCompile(`(?:^|/)vendor/modules\.txt$`),     // Go vendor modules list
@@ -36,7 +36,7 @@ func NewRegexFilter() Filter {
 	return rf
 }
 
-func (rf *RegexFilter) FilterOut(file LocalFile) bool {
+func (rf *regexFilter) FilterOut(file LocalFile) bool {
 	for _, pattern := range rf.patterns {
 		if pattern.MatchString(file.Path) {
 			return true

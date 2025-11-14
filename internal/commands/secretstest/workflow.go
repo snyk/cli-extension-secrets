@@ -13,7 +13,7 @@ import (
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
-	"github.com/snyk/cli-extension-secrets/pkg/filefilter"
+	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 const (
@@ -79,8 +79,13 @@ func SecretsWorkflow(
 	}
 
 	// Filter the files before upload
-	filter := filefilter.NewFileFilter()
-	filteredFiles := filter.Filter(ToFileFilterList(allFiles))
+	filters := []ff.FileFilter{
+		ff.FileSizeFilter(),
+		ff.FileExtensionFilter(),
+		ff.RegexPathFilter(),
+		ff.TextFileOnlyFilter(),
+	}
+	ff.Filter(ToFileFilterList(allFiles), filters...)
 
 	// TODO: setup the clients
 	// 1. for the upload api

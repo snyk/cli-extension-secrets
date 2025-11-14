@@ -20,14 +20,14 @@ var (
 	bomUTF16BE = []byte{0xFE, 0xFF}
 )
 
-type TextFileOnly struct {
+type textFileOnly struct {
 }
 
-func NewTextFileOnly() Filter {
-	return &TextFileOnly{}
+func TextFileOnlyFilter() FileFilter {
+	return &textFileOnly{}
 }
 
-func (TextFileOnly) FilterOut(file LocalFile) bool {
+func (textFileOnly) FilterOut(file LocalFile) bool {
 	// Attempt to read the file header
 	header, err := file.ReadHeader(_FILE_HEADER_SAMPLE_SIZE)
 	if err != nil {

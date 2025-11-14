@@ -4,14 +4,14 @@ const (
 	_MAX_FILE_SIZE = 5000000 // 50 MB
 )
 
-type FileSizeFilter struct {
+type fileSizeFilter struct {
 }
 
-func NewFileSizeFilter() Filter {
-	return &FileSizeFilter{}
+func FileSizeFilter() FileFilter {
+	return &fileSizeFilter{}
 }
 
-func (FileSizeFilter) FilterOut(file LocalFile) bool {
+func (fileSizeFilter) FilterOut(file LocalFile) bool {
 	if file.Info.Size() == 0 {
 		return true
 	}

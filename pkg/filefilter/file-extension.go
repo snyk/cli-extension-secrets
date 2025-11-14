@@ -5,12 +5,12 @@ import (
 	"slices"
 )
 
-type ExtensionFilter struct {
+type extensionFilter struct {
 	extensions []string
 }
 
-func NewExtensionFilter() Filter {
-	ef := &ExtensionFilter{}
+func FileExtensionFilter() FileFilter {
+	ef := &extensionFilter{}
 	ef.extensions = []string{
 		".bmp",
 		".dcm",
@@ -35,7 +35,7 @@ func NewExtensionFilter() Filter {
 	return ef
 }
 
-func (ef *ExtensionFilter) FilterOut(file LocalFile) bool {
+func (ef *extensionFilter) FilterOut(file LocalFile) bool {
 	extension := filepath.Ext(file.Path)
 	return slices.Contains(ef.extensions, extension)
 }

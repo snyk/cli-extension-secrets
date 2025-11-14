@@ -1,24 +1,14 @@
 package filefilter
 
-type Filter interface {
+type FileFilter interface {
 	FilterOut(LocalFile) bool
 }
 
-type FileFilter struct {
-	filters []Filter
-}
-
-func NewFileFilter() *FileFilter {
-	ff := &FileFilter{}
-	ff.filters = append(ff.filters, NewFileSizeFilter(), NewExtensionFilter(), NewRegexFilter(), NewTextFileOnly())
-	return ff
-}
-
-func (ff *FileFilter) Filter(files []LocalFile) []LocalFile {
+func Filter(files []LocalFile, filters ...FileFilter) []LocalFile {
 	results := make([]LocalFile, 0, len(files))
 	for _, file := range files {
 		shouldFilterOut := false
-		for _, filter := range ff.filters {
+		for _, filter := range filters {
 			if filter.FilterOut(file) {
 				shouldFilterOut = true
 				break
