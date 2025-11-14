@@ -219,9 +219,9 @@ func executeTest(ctx context.Context, testClient testapi.TestClient, testParam t
 			for _, apiError := range *apiErrors {
 				errorMessages = append(errorMessages, apiError.Detail)
 			}
-			return nil, nil, fmt.Errorf("Test execution error: %w", strings.Join(errorMessages, "; "))
+			return nil, nil, fmt.Errorf("test execution error: %v", strings.Join(errorMessages, "; "))
 		}
-		return nil, nil, fmt.Errorf("Test execution error: %w", "an unknown error occurred");
+		return nil, nil, fmt.Errorf("test execution error: %v", "an unknown error occurred");
 	}
 
 	// Get findings for the test
@@ -231,14 +231,14 @@ func executeTest(ctx context.Context, testClient testapi.TestClient, testParam t
 		if !complete && len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved as an error occurred")
 		}
-		return finalResult, findingsData, fmt.Errorf("Test execution error: test completed but findings could not be retrieved: %v", err);
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err);
 	}
 
 	if !complete {
 		if len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
 		}
-		return finalResult, findingsData, fmt.Errorf("Test execution error: test completed but findings could not be retrieved");
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved");
 	}
 	
 	return finalResult, findingsData, nil
