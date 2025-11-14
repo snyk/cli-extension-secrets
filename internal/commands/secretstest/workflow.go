@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -21,6 +23,8 @@ import (
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
 	FilterAndUploadFilesTimeout = 5 * time.Second
+	// LogFieldCount is the logger key for number of findings.
+	LogFieldCount = "count"
 )
 
 var (
@@ -141,12 +145,101 @@ func runWorkflow(
 	)
 	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
 
-	uploadResult, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
+	uploadRevision, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
 	if err != nil {
 		return fmt.Errorf("error creating revision: %w", err)
 	}
 
-	logger.Debug().Str("revisionID", uploadResult.RevisionID.String()).Msg("Upload result")
+	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
+	
+	uploadResource := testapi.UploadResource{
+		ContentType:  testapi.UploadResourceContentTypeSource,
+		FilePatterns: []string{},               // TODO: add file patterns
+		RevisionId:   uploadRevision.RevisionID.String(),
+		Type: testapi.Upload,
+	}
+	
+	var baseResourceVariant testapi.BaseResourceVariantCreateItem
+	if err := baseResourceVariant.FromUploadResource(uploadResource); err != nil {
+		return fmt.Errorf("failed to create base resource variant: %w", err)
+	}
+
+	baseResource := testapi.BaseResourceCreateItem{
+		Resource: baseResourceVariant,
+		Type:     testapi.BaseResourceCreateItemTypeBase,
+	}
+
+	var testResource testapi.TestResourceCreateItem
+	if err := testResource.FromBaseResourceCreateItem(baseResource); err != nil {
+		return fmt.Errorf("failed to create test resource: %w", err)
+	}
+
+	param := testapi.StartTestParams{
+		OrgID: orgID,
+		Resources: []testapi.TestResourceCreateItem{testResource},
+		LocalPolicy:   nil,  //TODO what do we need here ?
+	}
+
+	//result and findings for later use 
+	_, _, err := executeTest(ctx, tc, param, logger);
+
+	
+	if err != nil {
+		return fmt.Errorf("failed test execution: %w", err)
+	}
+
+	// TODO: map findings https://snyksec.atlassian.net/browse/PS-88
+
+	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score#Solution
+	// TODO: handle the output (use the module provided by IDE/CLI team that works with data layer findings?)
 
 	return nil
+}
+
+
+func executeTest(ctx context.Context, testClient testapi.TestClient, testParam testapi.StartTestParams, logger *zerolog.Logger) (testapi.TestResult, []testapi.FindingData, error) {
+	testHandle, err := testClient.StartTest(ctx, testParam)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start test: %w", err)
+	}
+
+	if waitErr := testHandle.Wait(ctx); waitErr != nil {
+		return nil, nil, fmt.Errorf("test run failed: %w", waitErr)
+	}
+
+	finalResult := testHandle.Result()
+	if finalResult == nil {
+		return nil, nil, fmt.Errorf("test completed but no result was returned")
+	}
+
+	if finalResult.GetExecutionState() == testapi.TestExecutionStatesErrored {
+		apiErrors := finalResult.GetErrors()
+		if apiErrors != nil && len(*apiErrors) > 0 {
+			var errorMessages []string
+			for _, apiError := range *apiErrors {
+				errorMessages = append(errorMessages, apiError.Detail)
+			}
+			return nil, nil, fmt.Errorf("Test execution error: %w", strings.Join(errorMessages, "; "))
+		}
+		return nil, nil, fmt.Errorf("Test execution error: %w", "an unknown error occurred");
+	}
+
+	// Get findings for the test
+	findingsData, complete, err := finalResult.Findings(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Error fetching findings")
+		if !complete && len(findingsData) > 0 {
+			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved as an error occurred")
+		}
+		return finalResult, findingsData, fmt.Errorf("Test execution error: test completed but findings could not be retrieved: %v", err);
+	}
+
+	if !complete {
+		if len(findingsData) > 0 {
+			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
+		}
+		return finalResult, findingsData, fmt.Errorf("Test execution error: test completed but findings could not be retrieved");
+	}
+	
+	return finalResult, findingsData, nil
 }
