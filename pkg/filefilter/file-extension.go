@@ -35,7 +35,7 @@ func FileExtensionFilter() FileFilter {
 	return ef
 }
 
-func (ef *extensionFilter) FilterOut(file LocalFile) bool {
-	extension := filepath.Ext(file.Path)
+func (ef *extensionFilter) FilterOut(file File) bool {
+	extension := filepath.Ext(file.Path())
 	return slices.Contains(ef.extensions, extension)
 }

@@ -27,7 +27,7 @@ func TextFileOnlyFilter() FileFilter {
 	return &textFileOnly{}
 }
 
-func (textFileOnly) FilterOut(file LocalFile) bool {
+func (textFileOnly) FilterOut(file File) bool {
 	// Attempt to read the file header
 	header, err := file.ReadHeader(_FILE_HEADER_SAMPLE_SIZE)
 	if err != nil {

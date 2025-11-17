@@ -11,11 +11,14 @@ func FileSizeFilter() FileFilter {
 	return &fileSizeFilter{}
 }
 
-func (fileSizeFilter) FilterOut(file LocalFile) bool {
-	if file.Info.Size() == 0 {
+func (fileSizeFilter) FilterOut(file File) bool {
+	if file.Info() == nil {
 		return true
 	}
-	if file.Info.Size() > _MAX_FILE_SIZE {
+	if file.Info().Size() == 0 {
+		return true
+	}
+	if file.Info().Size() > _MAX_FILE_SIZE {
 		return true
 	}
 	return false

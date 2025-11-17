@@ -78,14 +78,11 @@ func FindAllFiles(paths []string) ([]LocalFile, error) {
 	return allFiles, nil
 }
 
-func ToFileFilterList(files []LocalFile) []filefilter.LocalFile {
-	ffList := make([]filefilter.LocalFile, len(files))
+func ToFileFilterList(files []LocalFile) []filefilter.File {
+	ffList := make([]filefilter.File, len(files))
 	for i, file := range files {
 		// Manually copy the fields to create the new type
-		ffList[i] = filefilter.LocalFile{
-			Path: file.Path,
-			Info: file.Info,
-		}
+		ffList[i] = filefilter.NewLocalFile(file.Path, file.Info)
 	}
 	return ffList
 }

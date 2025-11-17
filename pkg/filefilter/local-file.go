@@ -5,13 +5,37 @@ import (
 	"os"
 )
 
+// File represents a file that can be filtered
+type File interface {
+	// Path returns the file's path
+	Path() string
+	Info() os.FileInfo
+	// ReadHeader reads the first n bytes of the file
+	ReadHeader(n int64) ([]byte, error)
+}
+
 type LocalFile struct {
-	Path string
-	Info os.FileInfo
+	path string
+	info os.FileInfo
+}
+
+func NewLocalFile(path string, info os.FileInfo) *LocalFile {
+	return &LocalFile{
+		path: path,
+		info: info,
+	}
+}
+
+func (lf *LocalFile) Path() string {
+	return lf.path
+}
+
+func (lf *LocalFile) Info() os.FileInfo {
+	return lf.info
 }
 
 func (lf *LocalFile) ReadHeader(n int64) ([]byte, error) {
-	f, err := os.Open(lf.Path)
+	f, err := os.Open(lf.path)
 	if err != nil {
 		return nil, err
 	}
@@ -19,8 +43,8 @@ func (lf *LocalFile) ReadHeader(n int64) ([]byte, error) {
 
 	// Get file size
 	var size int64
-	if lf.Info != nil {
-		size = lf.Info.Size()
+	if lf.Info() != nil {
+		size = lf.info.Size()
 	} else {
 		// Fallback if lf.Info is nil: get stats from the file handle
 		stat, err := f.Stat()

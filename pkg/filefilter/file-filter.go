@@ -1,11 +1,11 @@
 package filefilter
 
 type FileFilter interface {
-	FilterOut(LocalFile) bool
+	FilterOut(File) bool
 }
 
-func Filter(files []LocalFile, filters ...FileFilter) []LocalFile {
-	results := make([]LocalFile, 0, len(files))
+func Filter(files []File, filters ...FileFilter) []File {
+	results := make([]File, 0, len(files))
 	for _, file := range files {
 		shouldFilterOut := false
 		for _, filter := range filters {
