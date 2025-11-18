@@ -1,3 +1,4 @@
+//nolint:testpackage // whitebox
 package filefilter
 
 import (
@@ -7,7 +8,7 @@ import (
 )
 
 // mockFileInfo is a simple implementation of fs.FileInfo for testing.
-// It only implements the methods needed by the filter, primarily Size()
+// It only implements the methods needed by the filter, primarily Size().
 type mockFileInfo struct {
 	fileSize int64
 }
@@ -36,17 +37,17 @@ func TestFileSizeFilter_FilterOut(t *testing.T) {
 		},
 		{
 			name: "File just over max size",
-			size: _MAX_FILE_SIZE + 1,
+			size: _MaxFileSize + 1,
 			want: true,
 		},
 		{
 			name: "Very large file",
-			size: _MAX_FILE_SIZE * 10,
+			size: _MaxFileSize * 10,
 			want: true,
 		},
 		{
 			name: "File exactly at max size",
-			size: _MAX_FILE_SIZE,
+			size: _MaxFileSize,
 			want: false,
 		},
 		{
@@ -61,7 +62,7 @@ func TestFileSizeFilter_FilterOut(t *testing.T) {
 		},
 		{
 			name: "File just under max size",
-			size: _MAX_FILE_SIZE - 1,
+			size: _MaxFileSize - 1,
 			want: false,
 		},
 		{

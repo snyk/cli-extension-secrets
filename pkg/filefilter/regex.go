@@ -1,3 +1,4 @@
+//nolint:lll,ireturn ///Regex patterns can get pretty long
 package filefilter
 
 /*

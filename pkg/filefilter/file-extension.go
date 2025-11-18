@@ -1,3 +1,4 @@
+//nolint:ireturn // Returns interface because implementation is private
 package filefilter
 
 import (

@@ -1,11 +1,13 @@
 package filefilter
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"os"
 )
 
-// File represents a file that can be filtered
+// File represents a file that can be filtered.
 type File interface {
 	// Path returns the file's path
 	Path() string
@@ -37,7 +39,7 @@ func (lf *LocalFile) Info() os.FileInfo {
 func (lf *LocalFile) ReadHeader(n int64) ([]byte, error) {
 	f, err := os.Open(lf.path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
@@ -47,9 +49,9 @@ func (lf *LocalFile) ReadHeader(n int64) ([]byte, error) {
 		size = lf.info.Size()
 	} else {
 		// Fallback if lf.Info is nil: get stats from the file handle
-		stat, err := f.Stat()
-		if err != nil {
-			return nil, err
+		stat, statErr := f.Stat()
+		if statErr != nil {
+			return nil, fmt.Errorf("failed to get file stats: %w", statErr)
 		}
 		size = stat.Size()
 	}
@@ -65,8 +67,8 @@ func (lf *LocalFile) ReadHeader(n int64) ([]byte, error) {
 	buf := make([]byte, int(bytesToRead))
 	nr, err := f.Read(buf)
 	// We only return an error if it's *not* io.EOF
-	if err != nil && err != io.EOF {
-		return nil, err
+	if err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to read bytes: %w", err)
 	}
 	// Return the actual bytes read (buf[:nr])
 	return buf[:nr], nil

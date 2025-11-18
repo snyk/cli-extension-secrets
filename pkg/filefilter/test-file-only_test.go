@@ -1,3 +1,4 @@
+//nolint:testpackage // whitebox
 package filefilter
 
 import (
@@ -21,7 +22,7 @@ func (m *mockLocalFile) Info() os.FileInfo {
 }
 
 // The FilterOut function only uses the `ReadHeader` method
-// ReadHeader implements the LocalFile interface for the mock
+// ReadHeader implements the LocalFile interface for the mock.
 func (m *mockLocalFile) ReadHeader(size int64) ([]byte, error) {
 	if m.readErr != nil {
 		return nil, m.readErr
@@ -86,8 +87,8 @@ func TestTextFileOnlyFilter_FilterOut(t *testing.T) {
 		{
 			name: "filter-in-long-text-file",
 			file: &mockLocalFile{
-				// Mock will correctly truncate this to _FILE_HEADER_SAMPLE_SIZE
-				headerData: bytes.Repeat([]byte("a"), _FILE_HEADER_SAMPLE_SIZE+100),
+				// Mock will correctly truncate this to _FileHeaderSampleSize
+				headerData: bytes.Repeat([]byte("a"), _FileHeaderSampleSize+100),
 			},
 			wantFilterOut: false,
 			comment:       "Long text file sample is still text",
@@ -97,7 +98,7 @@ func TestTextFileOnlyFilter_FilterOut(t *testing.T) {
 			file: &mockLocalFile{
 				headerData: func() []byte {
 					// Create data with nulls inside the sample
-					d := bytes.Repeat([]byte("a"), _FILE_HEADER_SAMPLE_SIZE)
+					d := bytes.Repeat([]byte("a"), _FileHeaderSampleSize)
 					d[100] = 0x00
 					d[102] = 0x00
 					d[104] = 0x00
@@ -239,7 +240,8 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 			name:       "borderline-pass", // 9 odd, 1 even
 			header:     []byte{'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 0x00, 'b'},
 			wantIsText: true,
-			wantReason: "utf-16-heuristic", // 10 nulls total. 9 odd (90%), 1 even (10%). 90% == 90% is not > 90%, but 9/10 = 0.9. Wait, the check is `> _UTF_16_PATTERN_THRESHOLD`.
+			// 10 nulls total. 9 odd (90%), 1 even (10%). 90% == 90% is not > 90%, but 9/10 = 0.9. Wait, the check is `> _UTF_16_PATTERN_THRESHOLD`.
+			wantReason: "utf-16-heuristic",
 			// Let's re-check the logic. threshold = 0.90.
 			// 9 odd, 1 even. total = 10. oddShare = 9/10 = 0.9.
 			// Is 0.9 > 0.9? No.
@@ -366,7 +368,7 @@ func TestIsTextContent(t *testing.T) {
 		},
 		{
 			name:    "long-ascii-file-truncated",
-			data:    bytes.Repeat([]byte("a"), _FILE_HEADER_SAMPLE_SIZE+100),
+			data:    bytes.Repeat([]byte("a"), _FileHeaderSampleSize+100),
 			want:    true,
 			comment: "Should pass fast path even if sample is huge",
 		},
@@ -374,7 +376,7 @@ func TestIsTextContent(t *testing.T) {
 			name: "long-binary-file-nulls-at-end",
 			data: func() []byte {
 				// Create data larger than sample size
-				d := bytes.Repeat([]byte("a"), _FILE_HEADER_SAMPLE_SIZE+100)
+				d := bytes.Repeat([]byte("a"), _FileHeaderSampleSize+100)
 				// Add nulls within the sample-size-range
 				d[100] = 0x00
 				d[200] = 0x00

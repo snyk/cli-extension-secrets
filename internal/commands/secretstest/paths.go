@@ -1,6 +1,7 @@
 package secretstest
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ func FindAllFiles(paths []string) ([]LocalFile, error) {
 				continue
 			}
 
-			return nil, err
+			return nil, fmt.Errorf("failed to stat input path %q: %w", path, err)
 		}
 		if !info.IsDir() {
 			allFiles = append(allFiles, LocalFile{
@@ -53,7 +54,7 @@ func FindAllFiles(paths []string) ([]LocalFile, error) {
 		walkErr := filepath.WalkDir(path, func(walkPath string, d fs.DirEntry, err error) error {
 			// Check for an error passed by WalkDir (e.g., permission denied)
 			if err != nil {
-				return err
+				return fmt.Errorf("error accessing path %q during walk: %w", walkPath, err)
 			}
 			// We only want files, so if it's a directory, we skip adding it
 			if d.IsDir() {
@@ -62,7 +63,7 @@ func FindAllFiles(paths []string) ([]LocalFile, error) {
 
 			info, err := d.Info()
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get file info for %q: %w", walkPath, err)
 			}
 
 			allFiles = append(allFiles, LocalFile{
@@ -72,7 +73,7 @@ func FindAllFiles(paths []string) ([]LocalFile, error) {
 			return nil
 		})
 		if walkErr != nil {
-			return nil, walkErr
+			return nil, fmt.Errorf("failed to walk directory %q: %w", path, walkErr)
 		}
 	}
 	return allFiles, nil

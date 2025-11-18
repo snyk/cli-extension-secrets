@@ -1,27 +1,27 @@
+//nolint:ireturn // Returns interface because implementation is private
 package filefilter
 
 import "bytes"
 
 const (
-	// _MIN_NULLS_FOR_UTF_16_HEURISTIC is the minimum number of nulls needed to trust the pattern
-	// A single stray null byte isn't a pattern
-	_MIN_NULLS_FOR_UTF_16_HEURISTIC = 4
-	// _FILE_HEADER_SAMPLE_SIZE is the number of bytes read from a file in order to
-	// determine if it's text or binary
-	_FILE_HEADER_SAMPLE_SIZE = 512
-	// _UTF_16_PATTERN_THRESHOLD is how strong the pattern must be (e.g., 0.9 = 90%)
-	// 90% of nulls must be on *either* even or odd indices to be considered UTF-16
-	_UTF_16_PATTERN_THRESHOLD = 0.90
+	// _MinNullsForUTF16Heuristic is the minimum number of nulls needed to trust the pattern
+	// A single stray null byte isn't a pattern.
+	_MinNullsForUTF16Heuristic = 4
+	// _FileHeaderSampleSize is the number of bytes read from a file in order to
+	// determine if it's text or binary.
+	_FileHeaderSampleSize = 512
+	// _UTF16PatternThreshold is how strong the pattern must be (e.g., 0.9 = 90%)
+	// 90% of nulls must be on *either* even or odd indices to be considered UTF-16.
+	_UTF16PatternThreshold = 0.90
 )
 
-// BOM(Byte Order Mark) definitions
+// BOM(Byte Order Mark) definitions.
 var (
 	bomUTF16LE = []byte{0xFF, 0xFE}
 	bomUTF16BE = []byte{0xFE, 0xFF}
 )
 
-type textFileOnly struct {
-}
+type textFileOnly struct{}
 
 func TextFileOnlyFilter() FileFilter {
 	return &textFileOnly{}
@@ -29,7 +29,7 @@ func TextFileOnlyFilter() FileFilter {
 
 func (textFileOnly) FilterOut(file File) bool {
 	// Attempt to read the file header
-	header, err := file.ReadHeader(_FILE_HEADER_SAMPLE_SIZE)
+	header, err := file.ReadHeader(_FileHeaderSampleSize)
 	if err != nil {
 		// TODO: log the error
 		// Filters are enforced, we should exclude any files that we can't classify
@@ -64,7 +64,7 @@ func IsTextContent(data []byte) bool {
 }
 
 // Helper functions
-// checkBOM looks for known Unicode Byte Order Marks that signify text
+// checkBOM looks for known Unicode Byte Order Marks that signify text.
 func checkBOM(header []byte) (isText bool, reason string) {
 	if bytes.HasPrefix(header, bomUTF16LE) {
 		return true, "utf-16-le-bom"
@@ -77,7 +77,7 @@ func checkBOM(header []byte) (isText bool, reason string) {
 
 // checkUTF16Heuristic analyzes the *pattern* of null bytes to guess if it's UTF-16
 // It returns (isText, reason). If isText is false, the reason explains why it's
-// classified as binary (e.g., "has-null-random")
+// classified as binary (e.g., "has-null-random").
 func checkUTF16Heuristic(header []byte) (isText bool, reason string) {
 	var oddNulls, evenNulls, totalNulls int
 
@@ -95,7 +95,7 @@ func checkUTF16Heuristic(header []byte) (isText bool, reason string) {
 		}
 	}
 	// Check if we have enough data to make a guess
-	if totalNulls < _MIN_NULLS_FOR_UTF_16_HEURISTIC {
+	if totalNulls < _MinNullsForUTF16Heuristic {
 		// Not enough nulls for a pattern. Safer to assume binary
 		return false, "has-null-sparse"
 	}
@@ -105,7 +105,7 @@ func checkUTF16Heuristic(header []byte) (isText bool, reason string) {
 	oddShare := float64(oddNulls) / float64(totalNulls)
 
 	// Check if the pattern is strong enough
-	if evenShare > _UTF_16_PATTERN_THRESHOLD || oddShare > _UTF_16_PATTERN_THRESHOLD {
+	if evenShare > _UTF16PatternThreshold || oddShare > _UTF16PatternThreshold {
 		// >90% of nulls are on one side. This is a strong UTF-16 signal
 		return true, "utf-16-heuristic"
 	}

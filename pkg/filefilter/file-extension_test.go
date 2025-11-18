@@ -1,3 +1,4 @@
+//nolint:testpackage // whitebox
 package filefilter
 
 import "testing"
