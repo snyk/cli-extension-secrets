@@ -9,6 +9,7 @@ import (
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
@@ -78,11 +79,25 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 
+	// Parse all ignore files(git/snyk) found. This should be done on all directories from input paths
+	allIgnoreRules := make([]string, 0)
+	for _, path := range inputPaths {
+		// This will walk the directory tree again :/
+		// If path is a file, it will walk once for that path
+		filter := utils.NewFileFilter(path, logger)
+		ignoreRules, rulesErr := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
+		if rulesErr != nil {
+			logger.Error().Msgf("Error getting ignore rules: %s", rulesErr)
+			continue
+		}
+
+		allIgnoreRules = append(allIgnoreRules, ignoreRules...)
+	}
+
 	// Filter the files before upload
 	filters := []ff.FileFilter{
 		ff.FileSizeFilter(),
-		ff.FileExtensionFilter(),
-		ff.RegexPathFilter(),
+		ff.GlobFileFilter(allIgnoreRules),
 		ff.TextFileOnlyFilter(),
 	}
 	ff.Filter(ToFileFilterList(allFiles), filters...)
