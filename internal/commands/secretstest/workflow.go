@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
+	"slices"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -72,35 +74,31 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
-	// Find all the files from the input paths
-	allFiles, err := FindAllFiles(inputPaths)
+
+	path := "."
+	if len(inputPaths) > 0 {
+		path = inputPaths[0]
+	}
+
+	maxThreadCount := runtime.NumCPU()
+	filter := utils.NewFileFilter(path, logger, utils.WithThreadNumber(maxThreadCount))
+	foundIgnoreRules, err := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
 	if err != nil {
-		logger.Error().Err(err).Msg("failed to find all files from the provided paths")
+		logger.Error().Err(err).Msg("failed to get ignore files from the provided paths")
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 
-	// Parse all ignore files(git/snyk) found. This should be done on all directories from input paths
-	allIgnoreRules := make([]string, 0)
-	for _, path := range inputPaths {
-		// This will walk the directory tree again :/
-		// If path is a file, it will walk once for that path
-		filter := utils.NewFileFilter(path, logger)
-		ignoreRules, rulesErr := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
-		if rulesErr != nil {
-			logger.Error().Msgf("Error getting ignore rules: %s", rulesErr)
-			continue
-		}
+	customIgnoreRules := ff.GetCustomGlobFileFilters()
+	customIgnoreRules = slices.Grow(customIgnoreRules, len(foundIgnoreRules))
+	customIgnoreRules = append(customIgnoreRules, foundIgnoreRules...)
 
-		allIgnoreRules = append(allIgnoreRules, ignoreRules...)
-	}
+	globFilteredFiles := filter.GetFilteredFiles(filter.GetAllFiles(), customIgnoreRules)
 
-	// Filter the files before upload
-	filters := []ff.FileFilter{
-		ff.FileSizeFilter(),
-		ff.GlobFileFilter(allIgnoreRules),
-		ff.TextFileOnlyFilter(),
+	// Specialised filtering based on content and file metadata
+	textFiles := ff.Filter(globFilteredFiles, maxThreadCount, ff.FileSizeFilter(logger), ff.TextFileOnlyFilter(logger))
+	for file := range textFiles {
+		logger.Debug().Msgf("Will upload '%s'", file)
 	}
-	ff.Filter(ToFileFilterList(allFiles), filters...)
 
 	// TODO: setup the clients
 	// 1. for the upload api

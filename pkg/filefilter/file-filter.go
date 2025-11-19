@@ -1,71 +1,44 @@
 package filefilter
 
-import (
-	"context"
-	"runtime"
-	"sync"
-
-	"golang.org/x/sync/errgroup"
-)
+import "sync"
 
 type FileFilter interface {
-	FilterOut(File) bool
+	FilterOut(path string) bool
 }
 
 // Filter runs the provided files through the filters concurrently.
-func Filter(files []File, filters ...FileFilter) []File {
-	if len(files) == 0 {
-		return []File{}
-	}
-	// We use WithContext even though we don't expect errors,
-	// so we can respect context cancellation if we wanted to expand this later.
-	g, ctx := errgroup.WithContext(context.Background())
-	numWorkers := runtime.NumCPU() * 2
+func Filter(files chan string, maxThreadCount int, filters ...FileFilter) chan string {
+	filteredFiles := make(chan string, maxThreadCount)
 
-	// Buffered channel for the files to check
-	jobsChan := make(chan File, len(files))
+	var wg sync.WaitGroup
+	for range maxThreadCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 
-	// Pre-fill the channel with the data we already have
-	for _, f := range files {
-		jobsChan <- f
-	}
-	close(jobsChan)
-
-	var mu sync.Mutex
-	results := make([]File, 0, len(files))
-
-	// Start Workers
-	for range numWorkers {
-		g.Go(func() error {
-			for file := range jobsChan {
-				// Check for cancellation
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-
-				shouldFilterOut := false
+			// Iterate over incoming paths from the walker
+			for path := range files {
+				keep := true
+				// Check all filters (stop at first failure)
 				for _, filter := range filters {
-					if filter.FilterOut(file) {
-						shouldFilterOut = true
+					if filter.FilterOut(path) {
+						keep = false
 						break
 					}
 				}
 
-				if !shouldFilterOut {
-					mu.Lock()
-					results = append(results, file)
-					mu.Unlock()
+				if keep {
+					filteredFiles <- path
 				}
 			}
-			return nil
-		})
+		}()
 	}
-	// We ignore the error here because our workers return nil or ctx error,
-	// and we handle the empty result case naturally.
-	if err := g.Wait(); err != nil {
-		return results
-	}
-	return results
+
+	// This closer routine waits for workers to finish, then closes the channel.
+	// It does not block the return of this function.
+	go func() {
+		wg.Wait()
+		close(filteredFiles)
+	}()
+	return filteredFiles
 }

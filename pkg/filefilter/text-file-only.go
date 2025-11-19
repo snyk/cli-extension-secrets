@@ -1,7 +1,11 @@
 //nolint:ireturn // Returns interface because implementation is private
 package filefilter
 
-import "bytes"
+import (
+	"bytes"
+
+	"github.com/rs/zerolog"
+)
 
 const (
 	// _MinNullsForUTF16Heuristic is the minimum number of nulls needed to trust the pattern
@@ -21,19 +25,22 @@ var (
 	bomUTF16BE = []byte{0xFE, 0xFF}
 )
 
-type textFileOnly struct{}
-
-func TextFileOnlyFilter() FileFilter {
-	return &textFileOnly{}
+type textFileOnly struct {
+	logger *zerolog.Logger
 }
 
-func (textFileOnly) FilterOut(file File) bool {
+func TextFileOnlyFilter(logger *zerolog.Logger) FileFilter {
+	return &textFileOnly{
+		logger: logger,
+	}
+}
+
+func (f *textFileOnly) FilterOut(path string) bool {
 	// Attempt to read the file header
-	header, err := file.ReadHeader(_FileHeaderSampleSize)
+	header, err := ReadFileHeader(path, _FileHeaderSampleSize)
 	if err != nil {
-		// TODO: log the error
-		// Filters are enforced, we should exclude any files that we can't classify
-		// because of missing file header
+		// Filters are enforced, we should exclude any files that we can't classify because of missing file header
+		f.logger.Error().Msgf("failed to read file header stats: %v", err)
 		return true
 	}
 	return !IsTextContent(header)

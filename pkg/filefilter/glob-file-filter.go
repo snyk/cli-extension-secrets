@@ -1,10 +1,6 @@
 //nolint:ireturn // Returns interface because implementation is private
 package filefilter
 
-import (
-	gitignore "github.com/sabhiram/go-gitignore"
-)
-
 var IgnoredExtensionsGlob = []string{
 	"*.bmp", "*.dcm", "*.gif", "*.iff",
 	"*.jpg", "*.jpeg", "*.pbm", "*.pict",
@@ -100,23 +96,12 @@ var IgnoreGenericFilesGlob = []string{
 	"Database.refactorlog",
 }
 
-type globFileFilter struct {
-	globPatternMatcher *gitignore.GitIgnore
-}
+func GetCustomGlobFileFilters() []string {
+	totalLen := len(IgnoredExtensionsGlob) + len(IgnoreGenericFilesGlob)
+	customRules := make([]string, 0, totalLen)
 
-func GlobFileFilter(initialRules []string) FileFilter {
-	totalLen := len(IgnoredExtensionsGlob) + len(IgnoreGenericFilesGlob) + len(initialRules)
-	finalRules := make([]string, 0, totalLen)
+	customRules = append(customRules, IgnoredExtensionsGlob...)
+	customRules = append(customRules, IgnoreGenericFilesGlob...)
 
-	finalRules = append(finalRules, IgnoredExtensionsGlob...)
-	finalRules = append(finalRules, IgnoreGenericFilesGlob...)
-	finalRules = append(finalRules, initialRules...)
-
-	return &globFileFilter{
-		globPatternMatcher: gitignore.CompileIgnoreLines(finalRules...),
-	}
-}
-
-func (gf *globFileFilter) FilterOut(file File) bool {
-	return gf.globPatternMatcher.MatchesPath(file.Path())
+	return customRules
 }
