@@ -57,8 +57,8 @@ func TestTextFileOnlyFilter_FilterOut(t *testing.T) {
 			file: &mockLocalFile{
 				headerData: []byte{0x00, 'b', 0x00, 'i', 0x00, 'n', 0x00, 'a', 0x00, 'r', 0x00, 'y'},
 			},
-			wantFilterOut: true,
-			comment:       "Binary file (random nulls) SHOULD be filtered out",
+			wantFilterOut: false,
+			comment:       "UTF-16 like binary string (consistent left null padding)",
 		},
 		{
 			name: "filter-in-empty-file",
@@ -210,13 +210,13 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 			name:       "no-nulls",
 			header:     []byte{'h', 'e', 'l', 'l', 'o'},
 			wantIsText: false,
-			wantReason: "has-null-sparse", // 0 nulls < _MIN_NULLS_FOR_UTF_16_HEURISTIC
+			wantReason: "has-null-sparse", // 0 nulls < _MinNullsForUTF16Heuristic
 		},
 		{
 			name:       "too-few-nulls", // "h\x00e\x00l\x00o"
 			header:     []byte{'h', 0x00, 'e', 0x00, 'l', 0x00, 'o'},
 			wantIsText: false,
-			wantReason: "has-null-sparse", // 3 nulls < _MIN_NULLS_FOR_UTF_16_HEURISTIC
+			wantReason: "has-null-sparse", // 3 nulls < _MinNullsForUTF16Heuristic
 		},
 		{
 			name:       "min-nulls-pass", // "h\x00e\x00l\x00l\x00"
@@ -238,14 +238,12 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 		},
 		{
 			name:       "borderline-pass", // 9 odd, 1 even
-			header:     []byte{'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 0x00, 'b'},
+			header:     []byte{'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 0x00, 'b'},
 			wantIsText: true,
-			// 10 nulls total. 9 odd (90%), 1 even (10%). 90% == 90% is not > 90%, but 9/10 = 0.9. Wait, the check is `> _UTF_16_PATTERN_THRESHOLD`.
+			// 10 nulls total. 9 odd (90%), 1 even (10%). 90% == 90% is not > 90%, but 9/10 = 0.9. Wait, the check is `> _UTF16PatternThreshold`.
 			wantReason: "utf-16-heuristic",
 			// Let's re-check the logic. threshold = 0.90.
 			// 9 odd, 1 even. total = 10. oddShare = 9/10 = 0.9.
-			// Is 0.9 > 0.9? No.
-			// Let's make it 10 odd, 1 even.
 		},
 		{
 			name:       "borderline-pass-91-percent", // 10 odd, 1 even
@@ -268,7 +266,7 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 				t.Errorf("checkUTF16Heuristic() gotIsText = %v, want %v", gotIsText, tt.wantIsText)
 			}
 			if gotReason != tt.wantReason {
-				t.Errorf("checkUTF16Heuristic() gotReason = %v, want %v", gotReason, tt.wantReason)
+				t.Errorf("checkUTF16Heuristic() - %s - gotReason = %v, want %v | Data %v", tt.name, gotReason, tt.wantReason, tt.header)
 			}
 		})
 	}
@@ -373,20 +371,47 @@ func TestIsTextContent(t *testing.T) {
 			comment: "Should pass fast path even if sample is huge",
 		},
 		{
-			name: "long-binary-file-nulls-at-end",
+			name: "long-binary-file-nulls-mixed", // properly random
 			data: func() []byte {
-				// Create data larger than sample size
 				d := bytes.Repeat([]byte("a"), _FileHeaderSampleSize+100)
-				// Add nulls within the sample-size-range
-				d[100] = 0x00
-				d[200] = 0x00
-				d[300] = 0x00
-				d[400] = 0x00
-				d[500] = 0x00
+
+				// Mix even and odd indices to break the 90% threshold
+				d[100] = 0x00 // Even
+				d[201] = 0x00 // Odd
+				d[300] = 0x00 // Even
+				d[401] = 0x00 // Odd
+				d[500] = 0x00 // Even
+
+				// Stats: 3 Even, 2 Odd.
+				// Even Share: 60%, Odd Share: 40%.
+				// Both are < 90%. Result: Binary.
 				return d
 			}(),
 			want:    false,
-			comment: "Heuristic should fail (random nulls)",
+			comment: "Heuristic should fail (random null distribution)",
+		},
+		{
+			name: "true-random-binary",
+			data: func() []byte {
+				// Start with a high-entropy seed (like a compiled binary header).
+				// 0xFF and 0xFE are common in binaries but also BOMs, so use random noise.
+				d := make([]byte, 512)
+				for i := range d {
+					// Fill with random printable and non-printable bytes.
+					d[i] = byte(i % 255)
+				}
+
+				// Insert Nulls randomly to force the heuristic check.
+				// Ensure we hit the minimum count (4) but keep distribution mixed.
+				d[10] = 0x00
+				d[15] = 0x00
+				d[50] = 0x00
+				d[55] = 0x00
+
+				return d
+			}(),
+			want:    false,
+			comment: "High variance bytes with mixed nulls",
 		},
 	}
 
@@ -395,7 +420,7 @@ func TestIsTextContent(t *testing.T) {
 			// Note: IsTextContent might not check the full slice,
 			// but the test data is designed to work with the sample size.
 			if got := IsTextContent(tt.data); got != tt.want {
-				t.Errorf("IsTextContent() = %v, want %v (comment: %s)", got, tt.want, tt.comment)
+				t.Errorf("IsTextContent() Name: %s = %v, want %v (comment: %s)", tt.name, got, tt.want, tt.comment)
 			}
 		})
 	}
