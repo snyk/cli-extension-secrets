@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"slices"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
-	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
@@ -75,26 +73,9 @@ func SecretsWorkflow(
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
 
-	path := "."
-	if len(inputPaths) > 0 {
-		path = inputPaths[0]
-	}
-
-	maxThreadCount := runtime.NumCPU()
-	filter := utils.NewFileFilter(path, logger, utils.WithThreadNumber(maxThreadCount))
-	foundIgnoreRules, err := filter.GetRules([]string{".gitignore", ".dcignore", ".snyk"})
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to get ignore files from the provided paths")
-		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
-	}
-
-	customIgnoreRules := ff.GetCustomGlobFileFilters()
-	customIgnoreRules = slices.Grow(customIgnoreRules, len(foundIgnoreRules))
-	customIgnoreRules = append(customIgnoreRules, foundIgnoreRules...)
-
-	globFilteredFiles := filter.GetFilteredFiles(filter.GetAllFiles(), customIgnoreRules)
-
+	globFilteredFiles := FilterInputPaths(context.Background(), inputPaths, logger)
 	// Specialised filtering based on content and file metadata
+	maxThreadCount := runtime.NumCPU()
 	textFiles := ff.Filter(globFilteredFiles, maxThreadCount, ff.FileSizeFilter(logger), ff.TextFileOnlyFilter(logger))
 	for file := range textFiles {
 		logger.Debug().Msgf("Will upload '%s'", file)

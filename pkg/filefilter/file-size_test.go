@@ -1,91 +1,110 @@
-// //nolint:testpackage // whitebox
+//nolint:testpackage // whitebox testing to access _MaxFileSize
 package filefilter
 
-// import (
-// 	"io/fs"
-// 	"testing"
-// 	"time"
-// )
+import (
+	"os"
+	"path/filepath"
+	"testing"
 
-// // mockFileInfo is a simple implementation of fs.FileInfo for testing.
-// // It only implements the methods needed by the filter, primarily Size().
-// type mockFileInfo struct {
-// 	fileSize int64
-// }
+	"github.com/rs/zerolog"
+)
 
-// func (m mockFileInfo) Name() string       { return "mockfile" }
-// func (m mockFileInfo) Size() int64        { return m.fileSize }
-// func (m mockFileInfo) Mode() fs.FileMode  { return 0 }
-// func (m mockFileInfo) ModTime() time.Time { return time.Now() }
-// func (m mockFileInfo) IsDir() bool        { return false }
-// func (m mockFileInfo) Sys() interface{}   { return nil }
+// createSizedFile creates a temporary file with a specific logical size.
+// It uses file truncation to create sparse files, meaning it sets the
+// metadata size without actually writing bytes to disk.
+// This makes creating a 500MB test file instantaneous.
+func createSizedFile(t *testing.T, size int64) string {
+	t.Helper()
 
-// func TestFileSizeFilter_FilterOut(t *testing.T) {
-// 	// Initialize the filter
-// 	filter := FileSizeFilter()
+	// Create a temp file in a temp directory that cleans up automatically
+	f, err := os.CreateTemp(t.TempDir(), "size-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer f.Close()
 
-// 	// Define test cases
-// 	testCases := []struct {
-// 		name string // Description of the test case
-// 		size int64  // The file size to test
-// 		want bool   // The expected result (true = filter out, false = keep)
-// 	}{
-// 		{
-// 			name: "Empty file",
-// 			size: 0,
-// 			want: true,
-// 		},
-// 		{
-// 			name: "File just over max size",
-// 			size: _MaxFileSize + 1,
-// 			want: true,
-// 		},
-// 		{
-// 			name: "Very large file",
-// 			size: _MaxFileSize * 10,
-// 			want: true,
-// 		},
-// 		{
-// 			name: "File exactly at max size",
-// 			size: _MaxFileSize,
-// 			want: false,
-// 		},
-// 		{
-// 			name: "Normal file",
-// 			size: 1024,
-// 			want: false,
-// 		},
-// 		{
-// 			name: "Small file",
-// 			size: 1,
-// 			want: false,
-// 		},
-// 		{
-// 			name: "File just under max size",
-// 			size: _MaxFileSize - 1,
-// 			want: false,
-// 		},
-// 		{
-// 			name: "File with no Info",
-// 			size: -1, // Special case to test nil Info
-// 			want: true,
-// 		},
-// 	}
+	// If size > 0, extend the file to that size
+	if size > 0 {
+		if err := f.Truncate(size); err != nil {
+			t.Fatalf("failed to truncate file to size %d: %v", size, err)
+		}
+	}
 
-// 	// Run tests
-// 	for _, tt := range testCases {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			mockFile := NewLocalFile("testfile", mockFileInfo{fileSize: tt.size})
+	return f.Name()
+}
 
-// 			// Test the nil Info case
-// 			if tt.size == -1 {
-// 				mockFile = NewLocalFile("nil-info-file", nil)
-// 			}
+func TestFileSizeFilter_FilterOut(t *testing.T) {
+	// Use a Nop logger to keep test output clean
+	logger := zerolog.Nop()
+	filter := FileSizeFilter(&logger)
 
-// 			got := filter.FilterOut(mockFile)
-// 			if got != tt.want {
-// 				t.Errorf("FilterOut(size: %d) = %v, want %v", tt.size, got, tt.want)
-// 			}
-// 		})
-// 	}
-// }
+	testCases := []struct {
+		name        string
+		size        int64
+		nonExistent bool
+		want        bool
+	}{
+		{
+			name: "Empty file",
+			size: 0,
+			// Filter out empty files
+			want: true,
+		},
+		{
+			name: "Small file",
+			size: 1,
+			want: false,
+		},
+		{
+			name: "Normal file",
+			size: 1024,
+			want: false,
+		},
+		{
+			name: "File just under max size",
+			size: _MaxFileSize - 1,
+			want: false,
+		},
+		{
+			name: "File exactly at max size",
+			size: _MaxFileSize,
+			want: false,
+		},
+		{
+			name: "File just over max size",
+			size: _MaxFileSize + 1,
+			// Too big.
+			want: true,
+		},
+		{
+			name: "Very large file (10x max)",
+			size: _MaxFileSize * 10,
+			// Too big.
+			want: true,
+		},
+		{
+			name:        "File does not exist",
+			nonExistent: true,
+			// Error during stat = filter out.
+			want: true,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			var path string
+
+			if tt.nonExistent {
+				// Point to a path that definitely doesn't exist.
+				path = filepath.Join(t.TempDir(), "ghost-file")
+			} else {
+				path = createSizedFile(t, tt.size)
+			}
+
+			got := filter.FilterOut(path)
+			if got != tt.want {
+				t.Errorf("FilterOut() size=%d = %v, want %v", tt.size, got, tt.want)
+			}
+		})
+	}
+}
