@@ -1,26 +1,73 @@
 package filefilter
 
-import "sync"
+import (
+	"runtime"
+	"sync"
+)
 
+// FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {
 	FilterOut(path string) bool
 }
 
-// Filter runs the provided files through the filters concurrently.
-func Filter(files chan string, maxThreadCount int, filters ...FileFilter) chan string {
-	filteredFiles := make(chan string, maxThreadCount)
+// Pipeline holds the configuration for the filtering process.
+type Pipeline struct {
+	concurrency int
+	filters     []FileFilter
+}
 
+// Option defines the functional option type.
+type Option func(*Pipeline)
+
+// NewPipeline creates a filter pipeline with reasonable defaults.
+// Default concurrency is set to runtime.NumCPU().
+func NewPipeline(opts ...Option) *Pipeline {
+	// Default values
+	p := &Pipeline{
+		concurrency: runtime.NumCPU(),
+		filters:     []FileFilter{},
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// WithConcurrency allows overriding the default worker count.
+func WithConcurrency(n int) Option {
+	return func(p *Pipeline) {
+		if n > 0 {
+			p.concurrency = n
+		}
+	}
+}
+
+// WithFilters allows passing multiple filters (FileSizeFilter, TextFileOnlyFilter).
+func WithFilters(filters ...FileFilter) Option {
+	return func(p *Pipeline) {
+		p.filters = append(p.filters, filters...)
+	}
+}
+
+// Filter processes the input channel through the configured filters concurrently.
+// It returns a new channel containing only the files that passed all filters.
+func (p *Pipeline) Filter(files <-chan string) chan string {
+	// Output channel buffer size matches concurrency for optimal flow
+	filteredFiles := make(chan string, p.concurrency)
 	var wg sync.WaitGroup
-	for range maxThreadCount {
+
+	// Spin up workers based on the configured concurrency
+	for i := 0; i < p.concurrency; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			// Iterate over incoming paths from the walker
+			// Iterate over incoming paths
 			for path := range files {
 				keep := true
-				// Check all filters (stop at first failure)
-				for _, filter := range filters {
+
+				// Apply all configured filters
+				for _, filter := range p.filters {
 					if filter.FilterOut(path) {
 						keep = false
 						break
@@ -34,8 +81,7 @@ func Filter(files chan string, maxThreadCount int, filters ...FileFilter) chan s
 		}()
 	}
 
-	// This closer routine waits for workers to finish, then closes the channel.
-	// It does not block the return of this function.
+	// Closer routine
 	go func() {
 		wg.Wait()
 		close(filteredFiles)

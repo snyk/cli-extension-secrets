@@ -1,12 +1,11 @@
-//nolint:prealloc // We cannot know the size of the channel stream in advance
-package filefilter_test
+//nolint:prealloc,testpackage // We cannot know the size of the channel stream in advance
+package filefilter
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"testing"
-
-	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 // mockFilter implements FileFilter for testing purposes.
@@ -72,8 +71,13 @@ func TestFilter_Logic(t *testing.T) {
 	t.Run("Single Filter", func(t *testing.T) {
 		inputChan := sliceToChan(inputPaths)
 
-		// Run with 2 workers
-		outChan := ff.Filter(inputChan, 2, exeFilter)
+		// Use Pipeline with 2 workers
+		pipeline := NewPipeline(
+			WithConcurrency(2),
+			WithFilters(exeFilter),
+		)
+
+		outChan := pipeline.Filter(inputChan)
 		results := chanToSlice(outChan)
 
 		// Sort results because concurrent workers do not guarantee order
@@ -94,8 +98,13 @@ func TestFilter_Logic(t *testing.T) {
 	t.Run("Multiple Filters (Short Circuiting)", func(t *testing.T) {
 		inputChan := sliceToChan(inputPaths)
 
-		// Run with 4 workers. Should drop .exe and vendor/
-		outChan := ff.Filter(inputChan, 4, exeFilter, vendorFilter)
+		// Use Pipeline with 4 workers and multiple filters
+		pipeline := NewPipeline(
+			WithConcurrency(4),
+			WithFilters(exeFilter, vendorFilter),
+		)
+
+		outChan := pipeline.Filter(inputChan)
 		results := chanToSlice(outChan)
 
 		sortStrings(results)
@@ -115,7 +124,13 @@ func TestFilter_Logic(t *testing.T) {
 	t.Run("Empty Input", func(t *testing.T) {
 		// Empty channel.
 		inputChan := sliceToChan([]string{})
-		outChan := ff.Filter(inputChan, 1, exeFilter)
+
+		pipeline := NewPipeline(
+			WithConcurrency(1),
+			WithFilters(exeFilter),
+		)
+
+		outChan := pipeline.Filter(inputChan)
 		results := chanToSlice(outChan)
 
 		if len(results) != 0 {
@@ -124,7 +139,56 @@ func TestFilter_Logic(t *testing.T) {
 	})
 }
 
-// TestFilter_ConcurrencyStress checks for race conditions and deadlocks.
+// TestPipeline_Configuration uses white-box testing (same package)
+// to verify that options are correctly applied to the struct fields.
+func TestPipeline_Configuration(t *testing.T) {
+	t.Run("Defaults", func(t *testing.T) {
+		p := NewPipeline()
+
+		// Expect default CPU count
+		if p.concurrency != runtime.NumCPU() {
+			t.Errorf("expected default concurrency %d, got %d", runtime.NumCPU(), p.concurrency)
+		}
+		// Expect no filters
+		if len(p.filters) != 0 {
+			t.Errorf("expected 0 filters, got %d", len(p.filters))
+		}
+	})
+
+	t.Run("WithConcurrency", func(t *testing.T) {
+		// Valid custom concurrency
+		p := NewPipeline(WithConcurrency(42))
+		if p.concurrency != 42 {
+			t.Errorf("expected concurrency 42, got %d", p.concurrency)
+		}
+
+		// Invalid concurrency (should fallback to default or ignore)
+		// Assuming implementation ignores <= 0
+		pDefault := NewPipeline(WithConcurrency(-1))
+		if pDefault.concurrency <= 0 {
+			t.Error("concurrency should remain positive even if option is invalid")
+		}
+	})
+
+	t.Run("WithFilters", func(t *testing.T) {
+		f1 := &mockFilter{}
+		f2 := &mockFilter{}
+
+		p := NewPipeline(WithFilters(f1, f2))
+
+		if len(p.filters) != 2 {
+			t.Errorf("expected 2 filters, got %d", len(p.filters))
+		}
+
+		// Verify append behavior (if called multiple times)
+		p2 := NewPipeline(WithFilters(f1), WithFilters(f2))
+		if len(p2.filters) != 2 {
+			t.Errorf("expected 2 filters when chaining options, got %d", len(p2.filters))
+		}
+	})
+}
+
+// TestFilter_ConcurrencyStress checks for race conditions and data loss.
 // Run this with 'go test -race'.
 func TestFilter_ConcurrencyStress(t *testing.T) {
 	count := 10000
@@ -141,14 +205,19 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 		fn: func(string) bool { return false },
 	}
 
-	// Use a high thread count to force context switching.
-	outChan := ff.Filter(inputChan, 10, passAllFilter)
+	// Use Pipeline with high concurrency
+	pipeline := NewPipeline(
+		WithConcurrency(10),
+		WithFilters(passAllFilter),
+	)
+
+	outChan := pipeline.Filter(inputChan)
 
 	// Collect results.
 	results := chanToSlice(outChan)
 
 	// Assert count match.
 	if len(results) != count {
-		t.Errorf("Race condition check: Should return all files without data loss. Got %d, want %d", len(results), count)
+		t.Errorf("Stress test failed: Should return all files. Got %d, want %d", len(results), count)
 	}
 }

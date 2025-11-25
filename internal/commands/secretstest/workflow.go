@@ -73,10 +73,18 @@ func SecretsWorkflow(
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
 
-	globFilteredFiles := FilterInputPaths(context.Background(), inputPaths, logger)
+	ignoreFiles := []string{".gitignore"}
+	globFilteredFiles := ff.StreamAllowedFiles(context.Background(), inputPaths, ignoreFiles, logger)
+
 	// Specialised filtering based on content and file metadata
-	maxThreadCount := runtime.NumCPU()
-	textFiles := ff.Filter(globFilteredFiles, maxThreadCount, ff.FileSizeFilter(logger), ff.TextFileOnlyFilter(logger))
+	textFilesFilter := ff.NewPipeline(
+		ff.WithConcurrency(runtime.NumCPU()),
+		ff.WithFilters(
+			ff.FileSizeFilter(logger),
+			ff.TextFileOnlyFilter(logger),
+		),
+	)
+	textFiles := textFilesFilter.Filter(globFilteredFiles)
 	for file := range textFiles {
 		logger.Debug().Msgf("Will upload '%s'", file)
 	}
