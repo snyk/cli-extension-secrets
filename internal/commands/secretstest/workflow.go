@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"runtime"
+	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -13,10 +15,12 @@ import (
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
+	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 const (
 	FeatureFlagIsSecretsEnabled = "feature_flag_is_secrets_enabled"
+	FindSecretFilesTimeout      = 5 * time.Second
 )
 
 var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
@@ -70,6 +74,24 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
 	}
 	inputPaths := DetermineInputPaths(args, cwd)
+
+	ignoreFiles := []string{".gitignore"}
+	findFilesCtx, cancelFindFiles := context.WithTimeout(context.Background(), FindSecretFilesTimeout)
+	defer cancelFindFiles()
+	globFilteredFiles := ff.StreamAllowedFiles(findFilesCtx, inputPaths, ignoreFiles, ff.GetCustomGlobIgnoreRules(), logger)
+
+	// Specialised filtering based on content and file metadata
+	textFilesFilter := ff.NewPipeline(
+		ff.WithConcurrency(runtime.NumCPU()),
+		ff.WithFilters(
+			ff.FileSizeFilter(logger),
+			ff.TextFileOnlyFilter(logger),
+		),
+	)
+	textFiles := textFilesFilter.Filter(globFilteredFiles)
+	for file := range textFiles {
+		logger.Debug().Msgf("Will upload '%s'", file)
+	}
 
 	// TODO: setup the clients
 	// 1. for the upload api

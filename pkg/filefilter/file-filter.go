@@ -1,0 +1,90 @@
+package filefilter
+
+import (
+	"runtime"
+	"sync"
+)
+
+// FileFilter defines the contract for any logic that decides if a file should be dropped.
+type FileFilter interface {
+	FilterOut(path string) bool
+}
+
+// Pipeline holds the configuration for the filtering process.
+type Pipeline struct {
+	concurrency int
+	filters     []FileFilter
+}
+
+// Option defines the functional option type.
+type Option func(*Pipeline)
+
+// NewPipeline creates a filter pipeline with reasonable defaults.
+// Default concurrency is set to runtime.NumCPU().
+func NewPipeline(opts ...Option) *Pipeline {
+	// Default values
+	p := &Pipeline{
+		concurrency: runtime.NumCPU(),
+		filters:     []FileFilter{},
+	}
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+}
+
+// WithConcurrency allows overriding the default worker count.
+func WithConcurrency(n int) Option {
+	return func(p *Pipeline) {
+		if n > 0 {
+			p.concurrency = n
+		}
+	}
+}
+
+// WithFilters allows passing multiple filters (FileSizeFilter, TextFileOnlyFilter).
+func WithFilters(filters ...FileFilter) Option {
+	return func(p *Pipeline) {
+		p.filters = append(p.filters, filters...)
+	}
+}
+
+// Filter processes the input channel through the configured filters concurrently.
+// It returns a new channel containing only the files that passed all filters.
+func (p *Pipeline) Filter(files <-chan string) chan string {
+	// Output channel buffer size matches concurrency for optimal flow
+	filteredFiles := make(chan string, p.concurrency)
+	var wg sync.WaitGroup
+
+	// Spin up workers based on the configured concurrency
+	for i := 0; i < p.concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			// Iterate over incoming paths
+			for path := range files {
+				keep := true
+
+				// Apply all configured filters
+				for _, filter := range p.filters {
+					if filter.FilterOut(path) {
+						keep = false
+						break
+					}
+				}
+
+				if keep {
+					filteredFiles <- path
+				}
+			}
+		}()
+	}
+
+	// Closer routine
+	go func() {
+		wg.Wait()
+		close(filteredFiles)
+	}()
+	return filteredFiles
+}
