@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -19,6 +20,7 @@ import (
 
 const (
 	FeatureFlagIsSecretsEnabled = "feature_flag_is_secrets_enabled"
+	FindSecretFilesTimeout      = 5 * time.Second
 )
 
 var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
@@ -74,7 +76,9 @@ func SecretsWorkflow(
 	inputPaths := DetermineInputPaths(args, cwd)
 
 	ignoreFiles := []string{".gitignore"}
-	globFilteredFiles := ff.StreamAllowedFiles(context.Background(), inputPaths, ignoreFiles, logger)
+	findFilesCtx, cancelFindFiles := context.WithTimeout(context.Background(), FindSecretFilesTimeout)
+	defer cancelFindFiles()
+	globFilteredFiles := ff.StreamAllowedFiles(findFilesCtx, inputPaths, ignoreFiles, ff.GetCustomGlobIgnoreRules(), logger)
 
 	// Specialised filtering based on content and file metadata
 	textFilesFilter := ff.NewPipeline(

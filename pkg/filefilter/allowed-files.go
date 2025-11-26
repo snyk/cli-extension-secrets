@@ -3,7 +3,6 @@ package filefilter
 import (
 	"context"
 	"runtime"
-	"slices"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -11,12 +10,13 @@ import (
 )
 
 // StreamAllowedFiles iterates over multiple input paths, applies rules from specific
-// ignore files (.gitignore), and returns a single merged channel containing
+// ignore files (.gitignore) combined with rules from customGlobPatterns, and returns a single merged channel containing
 // only the file paths that are allowed (not ignored).
 func StreamAllowedFiles(
 	ctx context.Context,
 	inputPaths []string,
 	ignoreFilenames []string,
+	customGlobPatterns []string,
 	logger *zerolog.Logger,
 ) chan string {
 	// Create the merged output channel
@@ -45,8 +45,8 @@ func StreamAllowedFiles(
 			}
 
 			// Merge global custom rules with the specific rules found in files.
-			localRules := GetCustomGlobFileFilters()
-			localRules = slices.Grow(localRules, len(foundIgnoreRules))
+			localRules := make([]string, 0, len(customGlobPatterns)+len(foundIgnoreRules))
+			localRules = append(localRules, customGlobPatterns...)
 			localRules = append(localRules, foundIgnoreRules...)
 
 			//  Get the stream of allowed files.

@@ -91,7 +91,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		ctx := context.Background()
 
 		// Pass "." to simulate running from CLI root.
-		stream := ff.StreamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, &logger)
+		stream := ff.StreamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, ff.GetCustomGlobIgnoreRules(), &logger)
 		results := collectStream(stream, ".")
 
 		// Assert
@@ -128,7 +128,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 
 		ctx := context.Background()
 
-		stream := ff.StreamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, &logger)
+		stream := ff.StreamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, ff.GetCustomGlobIgnoreRules(), &logger)
 		results := collectStream(stream, ".")
 
 		if len(results) != 1 || results[0] != "code.go" {
@@ -146,7 +146,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		dirB := setupTempDir(t, filesB)
 
 		ctx := context.Background()
-		stream := ff.StreamAllowedFiles(ctx, []string{dirA, dirB}, []string{".gitignore"}, &logger)
+		stream := ff.StreamAllowedFiles(ctx, []string{dirA, dirB}, []string{".gitignore"}, ff.GetCustomGlobIgnoreRules(), &logger)
 
 		// Collect results using Base name to ignore path prefix differences.
 		var results []string
@@ -182,7 +182,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		// Input: one directory and one specific file.
 		// Note: Absolute paths used here.
 		inputs := []string{dir1, rootFile}
-		stream := ff.StreamAllowedFiles(ctx, inputs, []string{".gitignore"}, &logger)
+		stream := ff.StreamAllowedFiles(ctx, inputs, []string{".gitignore"}, ff.GetCustomGlobIgnoreRules(), &logger)
 
 		var results []string
 		for p := range stream {
@@ -216,7 +216,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		fileB := filepath.Join(rootDir, "fileB.txt")
 
 		ctx := context.Background()
-		stream := ff.StreamAllowedFiles(ctx, []string{fileA, fileB}, nil, &logger)
+		stream := ff.StreamAllowedFiles(ctx, []string{fileA, fileB}, nil, ff.GetCustomGlobIgnoreRules(), &logger)
 
 		var results []string
 		for p := range stream {
@@ -244,7 +244,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		rootDir := setupTempDir(t, files)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		stream := ff.StreamAllowedFiles(ctx, []string{rootDir}, []string{".gitignore"}, &logger)
+		stream := ff.StreamAllowedFiles(ctx, []string{rootDir}, []string{".gitignore"}, ff.GetCustomGlobIgnoreRules(), &logger)
 		cancel()
 
 		count := 0
@@ -265,4 +265,46 @@ func TestStreamAllowedFiles(t *testing.T) {
 			t.Fatal("stream did not close after context cancellation")
 		}
 	})
+}
+
+func TestStreamAllowedFiles_Timeout(t *testing.T) {
+	// Generate enough files to ensure processing takes longer than the timeout.
+	// 5000 files is usually enough to outlast a few milliseconds of processing.
+	files := make(map[string]string)
+	for idx := range 5000 {
+		files[fmt.Sprintf("file-%d", idx)] = "content"
+	}
+	rootDir := setupTempDir(t, files)
+
+	// We want the context to expire while the stream is still finding files.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+	defer cancel()
+
+	logger := zerolog.Nop()
+	start := time.Now()
+	stream := ff.StreamAllowedFiles(ctx, []string{rootDir}, nil, ff.GetCustomGlobIgnoreRules(), &logger)
+
+	// Drain the channel
+	count := 0
+	for range stream {
+		count++
+	}
+	duration := time.Since(start)
+
+	// Verify the context actually timed out
+	if ctx.Err() != context.DeadlineExceeded {
+		t.Errorf("Expected context deadline exceeded, got: %v", ctx.Err())
+	}
+
+	// If we processed ALL files, the test wasn't effective (machine was too fast or timeout too long).
+	if count == len(files) {
+		t.Logf("Warning: Processed all %d files. Consider increasing file count or decreasing timeout.", count)
+	} else {
+		t.Logf("Successfully halted early: processed %d/%d files", count, len(files))
+	}
+
+	// Verify we didn't block indefinitely (hung waiting for a semaphore)
+	if duration > 1*time.Second {
+		t.Errorf("Function took %v to return, expected it to respect the short timeout", duration)
+	}
 }
