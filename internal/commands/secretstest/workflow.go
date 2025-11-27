@@ -176,7 +176,7 @@ func runWorkflow(
 
 	param := testapi.StartTestParams{
 		OrgID: orgID,
-		Resources: []testapi.TestResourceCreateItem{testResource},
+		Resources: &[]testapi.TestResourceCreateItem{testResource},
 		LocalPolicy:   nil,  //TODO what do we need here ?
 	}
 
