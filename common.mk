@@ -22,7 +22,7 @@ SHELL:=env PATH=$(GO_BIN):$(NODE_BIN):$(PYTHON_PATH)/bin:$(PATH) $(SHELL)
 # Tooling versions as served by CircleCI cimg/go convenience image
 # https://github.com/CircleCI-Public/cimg-go/blob/main/1.23/Dockerfile#L27-L28
 GOTESTSUM_V?=1.12.0
-GOCI_LINT_V?=v2.7.2
+GOCI_LINT_V?=v1.64.8
 PRE_COMMIT_V?=v3.8
 
 .DEFAULT_GOAL:=help
@@ -105,11 +105,6 @@ else
 	golangci-lint run -v ./...
 endif
 
-.PHONY: lint-secrets
-lint-secrets: ## Run gitleaks
-	gitleaks detect -v --redact
-
-
 .PHONY: test
 test: ## Run unit tests
 	mkdir -p test/results
@@ -122,5 +117,5 @@ test-integration: ## Run integration tests
 
 .PHONY: update-deps
 update-deps: ## Update all dependencies to newer minor or patch releases
-	go get -d -u ./...
+	go get  -u ./...
 	go mod tidy

@@ -1,10 +1,85 @@
-version: "2"
 run:
-  concurrency: 4
   build-tags:
     - integration
+  concurrency: 4
   issues-exit-code: 1
   tests: true
+  timeout: 5m
+
+linters-settings:
+  errcheck:
+    check-blank: true
+    check-type-assertions: true
+  exhaustive:
+    default-signifies-exhaustive: true
+  goconst:
+    ignore-calls: false
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  gocyclo:
+    min-complexity: 15
+  gofumpt:
+    module-path: github.com/snyk/cli-extension-secrets
+    extra-rules: true
+  goimports:
+    local-prefixes: github.com/snyk/cli-extension-secrets
+  gosimple:
+    checks: ["all"]
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment
+  lll:
+    line-length: 160
+  misspell:
+    locale: US
+  nolintlint:
+    allow-unused: false
+    require-explanation: true
+    require-specific: true
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  promlinter:
+    strict: true
+  revive:
+    rules:
+      - name: blank-imports
+        disabled: true
+      - name: context-as-argument
+      - name: context-keys-type
+      - name: dot-imports
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: exported
+        disable-stuttering-check: true
+      - name: if-return
+      - name: increment-decrement
+      - name: var-naming
+      - name: var-declaration
+        disabled: true
+      - name: package-comments
+      - name: range
+      - name: receiver-naming
+      - name: time-naming
+      - name: unexported-return
+      - name: indent-error-flow
+      - name: errorf
+      - name: empty-block
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id
+  staticcheck:
+    checks: ["all"]
+
 linters:
   enable:
     - asasalint
@@ -19,12 +94,16 @@ linters:
     - errname
     - errorlint
     - exhaustive
+    - copyloopvar
     - forbidigo
     - forcetypeassert
     - goconst
     - gocritic
     - gocyclo
     - godot
+    - gofmt
+    - gofumpt
+    - goimports
     - goprintffuncname
     - gosec
     - interfacebloat
@@ -52,110 +131,27 @@ linters:
     - unparam
     - usestdlibvars
     - usetesting
-    - wastedassign
     - whitespace
     - wrapcheck
-  settings:
-    errcheck:
-      check-type-assertions: true
-      check-blank: true
-    exhaustive:
-      default-signifies-exhaustive: true
-    goconst:
-      ignore-calls: false
-    gocritic:
-      enabled-tags:
-        - diagnostic
-        - experimental
-        - opinionated
-        - performance
-        - style
-    gocyclo:
-      min-complexity: 15
-    govet:
-      disable:
-        - fieldalignment
-      enable-all: true
-    lll:
-      line-length: 160
-    misspell:
-      locale: US
-    nolintlint:
-      require-explanation: true
-      require-specific: true
-      allow-unused: false
-    prealloc:
-      simple: true
-      range-loops: true
-      for-loops: true
-    promlinter:
-      strict: true
-    revive:
-      rules:
-        - name: blank-imports
-          disabled: true
-        - name: context-as-argument
-        - name: context-keys-type
-        - name: dot-imports
-        - name: error-return
-        - name: error-strings
-        - name: error-naming
-        - name: exported
-        - name: if-return
-        - name: increment-decrement
-        - name: var-naming
-        - name: var-declaration
-          disabled: true
-        - name: package-comments
-        - name: range
-        - name: receiver-naming
-        - name: time-naming
-        - name: unexported-return
-        - name: indent-error-flow
-        - name: errorf
-        - name: empty-block
-        - name: superfluous-else
-        - name: unused-parameter
-        - name: unreachable-code
-        - name: redefines-builtin-id
-    staticcheck:
-      checks:
-        - all
-  exclusions:
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
-    rules:
-      - linters:
-          - bodyclose
-          - forcetypeassert
-          - goconst
-          - ireturn
-        path: _test\.go
-      - linters:
-          - testpackage
-        path: test/
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
-formatters:
-  enable:
-    - gofumpt
-    - goimports
-  settings:
-    gofumpt:
-      module-path: github.com/snyk/cli-extension-secrets
-      extra-rules: true
-    goimports:
-      local-prefixes:
-        - github.com/snyk/cli-extension-secrets
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+
+issues:
+  # List of regexps of files that should be excluded from all linters.
+  # The filenames are checked against the full path.
+  exclude-dirs:
+    # Exclude vendor directory
+    - vendor
+    # Exclude Go module cache (for when the linter incorrectly checks it)
+    - pkg/mod
+  exclude-rules:
+    - path: pkg/filefilter/allowed-files_test.go
+      linters:
+        - goconst
+    - path: internal/commands/secretstest/validate_test.go
+      linters:
+        - ireturn
+    - path: internal/commands/secretstest/workflow_test.go
+      linters:
+        - ireturn
+    - path: internal/commands/secretstest/validate_test.go
+      linters:
+        - testpackage
