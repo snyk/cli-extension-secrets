@@ -105,6 +105,12 @@ else
 	golangci-lint run -v ./...
 endif
 
+.PHONY: lint-secrets
+lint-secrets: ## Run gitleaks
+	gitleaks detect -v --redact
+
+
+
 .PHONY: test
 test: ## Run unit tests
 	mkdir -p test/results
