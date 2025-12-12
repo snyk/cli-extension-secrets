@@ -2,6 +2,7 @@ package secretstest
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"os"
 	"runtime"
@@ -11,12 +12,19 @@ import (
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
 	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
+
+// mockTestResultJSON has some mock test results coming from the test API
+// TODO: remove this after done with testing
+//
+//go:embed testdata/mock_test_result.json
+var mockTestResultJSON []byte
 
 const (
 	FeatureFlagIsSecretsEnabled = "feature_flag_is_secrets_enabled"
@@ -110,13 +118,13 @@ func SecretsWorkflow(
 	// TODO: here we need to pass all required clients (uploadapi, testshim)
 	// better to create a wrapper struct with all the required clients
 	ctx := context.Background()
-	err = runWorkflow(ctx, testShimClient, uploadClient, inputPaths, logger)
+	output, err := runWorkflow(ctx, testShimClient, uploadClient, inputPaths, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
 	}
 
-	return nil, nil
+	return output, nil
 }
 
 func checkSecretsEnabled(config configuration.Configuration) error {
@@ -129,19 +137,45 @@ func checkSecretsEnabled(config configuration.Configuration) error {
 	return nil
 }
 
-//nolint:unparam // TODO: remove this after adding the implem
 func runWorkflow(
-	_ context.Context,
+	ctx context.Context,
 	_ *testshim.Client,
 	_ *upload.Client,
 	_ []string,
 	logger *zerolog.Logger,
-) error {
+) ([]workflow.Data, error) {
 	logger.Debug().Msg("running secrets test workflow...")
-	// TODO: create the revision via the upload client
-	// TODO: populate the subject struct (which is generated type from data-schema?)
-	// TODO: run the test on the subject via the testshim client (start the test, poll the test, get results)
-	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score#Solution
-	// TODO: handle the output (use the module provided by IDE/CLI team that works with data layer findings?)
-	return nil
+
+	testResults, err := ufm.NewSerializableTestResultFromBytes(mockTestResultJSON)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to load embedded test result")
+		return nil, fmt.Errorf("failed to load test result: %w", err)
+	}
+
+	if len(testResults) == 0 {
+		logger.Warn().Msg("no test results loaded")
+		return nil, nil
+	}
+
+	// we can only run one test
+	testResult := testResults[0]
+
+	logger.Debug().
+		Str("testId", testResult.GetTestID().String()).
+		Str("executionState", string(testResult.GetExecutionState())).
+		Msg("loaded test result")
+
+	findings, complete, err := testResult.Findings(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to get findings from loaded result")
+		return nil, fmt.Errorf("failed to get findings: %w", err)
+	}
+
+	logger.Info().
+		Int("findingsCount", len(findings)).
+		Bool("complete", complete).
+		Msg("findings loaded")
+
+	output := ufm.CreateWorkflowDataFromTestResults(WorkflowID, testResults)
+	return []workflow.Data{output}, nil
 }
