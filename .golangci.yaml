@@ -59,6 +59,7 @@ linters-settings:
       - name: error-strings
       - name: error-naming
       - name: exported
+        disable-stuttering-check: true
       - name: if-return
       - name: increment-decrement
       - name: var-naming
@@ -78,9 +79,6 @@ linters-settings:
       - name: redefines-builtin-id
   staticcheck:
     checks: ["all"]
-  stylecheck:
-    checks: ["all"]
-    http-status-code-whitelist: []
 
 linters:
   enable:
@@ -96,12 +94,14 @@ linters:
     - errname
     - errorlint
     - exhaustive
+    - copyloopvar
     - forbidigo
     - forcetypeassert
     - goconst
     - gocritic
     - gocyclo
     - godot
+    - gofmt
     - gofumpt
     - goimports
     - goprintffuncname
@@ -122,27 +122,36 @@ linters:
     - revive
     - rowserrcheck
     - sqlclosecheck
-    - stylecheck
+    - staticcheck
     - tagliatelle
-    - usetesting
     - testpackage
     - thelper
     - tparallel
     - unconvert
     - unparam
     - usestdlibvars
-    - wastedassign
+    - usetesting
     - whitespace
     - wrapcheck
 
 issues:
+  # List of regexps of files that should be excluded from all linters.
+  # The filenames are checked against the full path.
+  exclude-dirs:
+    # Exclude vendor directory
+    - vendor
+    # Exclude Go module cache (for when the linter incorrectly checks it)
+    - pkg/mod
   exclude-rules:
-    - path: _test\.go
+    - path: pkg/filefilter/allowed-files_test.go
       linters:
-        - bodyclose
-        - forcetypeassert
         - goconst
+    - path: internal/commands/secretstest/validate_test.go
+      linters:
         - ireturn
-    - path: test/
+    - path: internal/commands/secretstest/workflow_test.go
+      linters:
+        - ireturn
+    - path: internal/commands/secretstest/validate_test.go
       linters:
         - testpackage
