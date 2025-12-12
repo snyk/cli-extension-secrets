@@ -32,6 +32,9 @@ var (
 	setupClientsFn = setupClients // internal for testing
 )
 
+// makeTestShimClient allows mocking the test shim client creation in tests.
+var makeTestShimClient = testshim.NewClient
+
 func RegisterWorkflows(e workflow.Engine) error {
 	flagSet := GetSecretsTestFlagSet()
 
@@ -148,7 +151,7 @@ func runWorkflow(
 	uploadRevision, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
 	if err != nil {
 		return fmt.Errorf("error creating revision: %w", err)
-	}
+	
 
 	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
 	
@@ -175,15 +178,13 @@ func runWorkflow(
 	}
 
 	param := testapi.StartTestParams{
-		OrgID: orgID,
-		Resources: &[]testapi.TestResourceCreateItem{testResource},
-		LocalPolicy:   nil,  //TODO what do we need here ?
+		OrgID:       orgID,
+		Resources:   &[]testapi.TestResourceCreateItem{testResource},
+		LocalPolicy: nil, // TODO what do we need here ?
 	}
 
-	//result and findings for later use 
-	_, _, err := executeTest(ctx, tc, param, logger);
-
-	
+	// result and findings for later use
+	_, _, err := executeTest(ctx, tc, param, logger)
 	if err != nil {
 		return fmt.Errorf("failed test execution: %w", err)
 	}
@@ -196,8 +197,12 @@ func runWorkflow(
 	return nil
 }
 
-
-func executeTest(ctx context.Context, testClient testapi.TestClient, testParam testapi.StartTestParams, logger *zerolog.Logger) (testapi.TestResult, []testapi.FindingData, error) {
+//nolint:ireturn // Returns interface because implementation is private
+func executeTest(ctx context.Context,
+	testClient testapi.TestClient,
+	testParam testapi.StartTestParams,
+	logger *zerolog.Logger,
+) (testapi.TestResult, []testapi.FindingData, error) {
 	testHandle, err := testClient.StartTest(ctx, testParam)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start test: %w", err)
@@ -221,7 +226,7 @@ func executeTest(ctx context.Context, testClient testapi.TestClient, testParam t
 			}
 			return nil, nil, fmt.Errorf("test execution error: %v", strings.Join(errorMessages, "; "))
 		}
-		return nil, nil, fmt.Errorf("test execution error: %v", "an unknown error occurred");
+		return nil, nil, fmt.Errorf("test execution error: %v", "an unknown error occurred")
 	}
 
 	// Get findings for the test
@@ -231,15 +236,15 @@ func executeTest(ctx context.Context, testClient testapi.TestClient, testParam t
 		if !complete && len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved as an error occurred")
 		}
-		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err);
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err)
 	}
 
 	if !complete {
 		if len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
 		}
-		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved");
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
 	}
-	
+
 	return finalResult, findingsData, nil
 }

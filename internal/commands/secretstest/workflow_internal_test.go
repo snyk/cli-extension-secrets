@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
 	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 )
 
-// MockTestClient implements testapi.TestClient
+// MockTestClient implements testapi.TestClient.
 type MockTestClient struct {
 	mock.Mock
 }
@@ -29,8 +30,7 @@ func (m *MockTestClient) StartTest(ctx context.Context, params testapi.StartTest
 	return args.Get(0).(testapi.TestHandle), args.Error(1)
 }
 
-
-// MockTestHandle implements testapi.TestHandle
+// MockTestHandle implements testapi.TestHandle.
 type MockTestHandle struct {
 	mock.Mock
 }
@@ -53,7 +53,7 @@ func (m *MockTestHandle) Done() <-chan struct{} {
 	return args.Get(0).(<-chan struct{})
 }
 
-// MockTestResult implements testapi.TestResult
+// MockTestResult implements testapi.TestResult.
 type MockTestResult struct {
 	mock.Mock
 }
@@ -88,6 +88,22 @@ func (m *MockTestResult) GetTestResources() *[]testapi.TestResource {
 		return nil
 	}
 	return args.Get(0).(*[]testapi.TestResource)
+}
+
+func (m *MockTestResult) GetSubjectLocators() *[]testapi.TestSubjectLocator {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*[]testapi.TestSubjectLocator)
+}
+
+func (m *MockTestResult) GetTestSubject() *testapi.TestSubject {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*testapi.TestSubject)
 }
 
 func (m *MockTestResult) GetExecutionState() testapi.TestExecutionStates {
@@ -172,14 +188,14 @@ func TestRunWorkflow_Success(t *testing.T) {
 	mockTestHandle := new(MockTestHandle)
 	mockTestResult := new(MockTestResult)
 
-	// Setup expectations
+	// Setup expectations.
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
 	mockTestHandle.On("Wait", mock.Anything).Return(nil)
 	mockTestHandle.On("Result").Return(mockTestResult)
 	mockTestResult.On("GetExecutionState").Return(testapi.TestExecutionStatesFinished)
 	mockTestResult.On("Findings", mock.Anything).Return([]testapi.FindingData{}, true, nil)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tc := &testshim.Client{TestClient: mockTestClient}
 	uc := &upload.Client{}
 	logger := zerolog.Nop()
@@ -195,10 +211,10 @@ func TestRunWorkflow_Success(t *testing.T) {
 func TestRunWorkflow_StartTestError(t *testing.T) {
 	mockTestClient := new(MockTestClient)
 
-	// Setup expectations
+	// Setup expectations.
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(nil, errors.New("start error"))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tc := &testshim.Client{TestClient: mockTestClient}
 	uc := &upload.Client{}
 	logger := zerolog.Nop()
@@ -214,11 +230,11 @@ func TestRunWorkflow_WaitError(t *testing.T) {
 	mockTestClient := new(MockTestClient)
 	mockTestHandle := new(MockTestHandle)
 
-	// Setup expectations
+	// Setup expectations.
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
 	mockTestHandle.On("Wait", mock.Anything).Return(errors.New("wait error"))
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tc := &testshim.Client{TestClient: mockTestClient}
 	uc := &upload.Client{}
 	logger := zerolog.Nop()
@@ -236,16 +252,16 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestHandle := new(MockTestHandle)
 	mockTestResult := new(MockTestResult)
 
-	// Setup expectations
+	// Setup expectations.
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
 	mockTestHandle.On("Wait", mock.Anything).Return(nil)
 	mockTestHandle.On("Result").Return(mockTestResult)
 	mockTestResult.On("GetExecutionState").Return(testapi.TestExecutionStatesErrored)
-	
+
 	apiErrors := []testapi.IoSnykApiCommonError{{Detail: "api error details"}}
 	mockTestResult.On("GetErrors").Return(apiErrors)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	tc := &testshim.Client{TestClient: mockTestClient}
 	uc := &upload.Client{}
 	logger := zerolog.Nop()
@@ -255,7 +271,7 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "test execution error")
 	assert.Contains(t, err.Error(), "api error details")
-	
+
 	mockTestClient.AssertExpectations(t)
 	mockTestHandle.AssertExpectations(t)
 	mockTestResult.AssertExpectations(t)
