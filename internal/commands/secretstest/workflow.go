@@ -2,15 +2,19 @@ package secretstest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
 	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
@@ -110,7 +114,8 @@ func SecretsWorkflow(
 	// TODO: here we need to pass all required clients (uploadapi, testshim)
 	// better to create a wrapper struct with all the required clients
 	ctx := context.Background()
-	err = runWorkflow(ctx, testShimClient, uploadClient, inputPaths, logger)
+	err = runWorkflow(ctx, testShimClient, uploadClient, orgID, inputPaths, logger)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
@@ -131,17 +136,143 @@ func checkSecretsEnabled(config configuration.Configuration) error {
 
 //nolint:unparam // TODO: remove this after adding the implem
 func runWorkflow(
-	_ context.Context,
-	_ *testshim.Client,
+	ctx context.Context,
+	tc *testshim.Client,
 	_ *upload.Client,
+	orgID string,
 	_ []string,
 	logger *zerolog.Logger,
 ) error {
-	logger.Debug().Msg("running secrets test workflow...")
+	logger.Debug().Msg("running secrets test workflow v2...")
+
 	// TODO: create the revision via the upload client
-	// TODO: populate the subject struct (which is generated type from data-schema?)
-	// TODO: run the test on the subject via the testshim client (start the test, poll the test, get results)
+	repoURL := "https://github.com/gitleaks/fake-leaks"
+	uploadResource := testapi.UploadResource{
+		ContentType:  testapi.UploadResourceContentTypeSource,
+		FilePatterns: []string{},                                     // TODO
+		RevisionId:   string("e1e870d1-93ef-4a35-b6c6-0d184fe8e5ec"), // TODO replace placeholder
+		// RevisionId:   uploadRevision.RevisionID.String(),
+		Type:          testapi.Upload,
+		RepositoryUrl: &repoURL,
+	}
+
+	var baseResourceVariant testapi.BaseResourceVariantCreateItem
+	if err := baseResourceVariant.FromUploadResource(uploadResource); err != nil {
+		return fmt.Errorf("failed to create base resource variant: %w", err)
+	}
+
+	baseResource := testapi.BaseResourceCreateItem{
+		Resource: baseResourceVariant,
+		Type:     testapi.BaseResourceCreateItemTypeBase,
+	}
+
+	var testResource testapi.TestResourceCreateItem
+	if err := testResource.FromBaseResourceCreateItem(baseResource); err != nil {
+		return fmt.Errorf("failed to create test resource: %w", err)
+	}
+	secretsConfig := make(map[string]interface{})
+
+	param := testapi.StartTestParams{
+		OrgID:     orgID,
+		Resources: &[]testapi.TestResourceCreateItem{testResource},
+		ScanConfig: &testapi.ScanConfiguration{
+			Secrets: &secretsConfig,
+		},
+	}
+
+	paramJSON, _ := json.MarshalIndent(param, "", "  ")
+	logger.Debug().Msgf("StartTest parameters: %s", string(paramJSON))
+
+	//result and findings for later use
+	results, findings, err := executeTest(ctx, tc, param, logger)
+	if err != nil {
+		return fmt.Errorf("failed test execution: %w", err)
+	}
+
+	serializableResult, err := ufm.NewSerializableTestResult(ctx, results)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to create serializable test result")
+		return fmt.Errorf("failed to create serializable test result: %w", err)
+	}
+
+	if err := writeJSON(serializableResult, "df-test-result.json"); err != nil {
+		logger.Error().Err(err).Msg("failed to write test result")
+		return fmt.Errorf("failed to write test result: %w", err)
+	}
+
+	if err := writeJSON(findings, "df-findings.json"); err != nil {
+		logger.Error().Err(err).Msg("failed to write findings")
+		return fmt.Errorf("failed to write findings: %w", err)
+	}
+
+	logger.Info().Msg("wrote test-result.json and findings.json")
+
+	// TODO: map findings https://snyksec.atlassian.net/browse/PS-88
 	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score#Solution
 	// TODO: handle the output (use the module provided by IDE/CLI team that works with data layer findings?)
+	return nil
+}
+
+func executeTest(ctx context.Context, testClient testapi.TestClient, testParam testapi.StartTestParams, logger *zerolog.Logger) (testapi.TestResult, []testapi.FindingData, error) {
+	testHandle, err := testClient.StartTest(ctx, testParam)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start test: %w", err)
+	}
+
+	if waitErr := testHandle.Wait(ctx); waitErr != nil {
+		return nil, nil, fmt.Errorf("test run failed: %w", waitErr)
+	}
+
+	finalResult := testHandle.Result()
+	if finalResult == nil {
+		return nil, nil, fmt.Errorf("test completed but no result was returned")
+	}
+
+	if finalResult.GetExecutionState() == testapi.TestExecutionStatesErrored {
+		apiErrors := finalResult.GetErrors()
+		if apiErrors != nil && len(*apiErrors) > 0 {
+			var errorMessages []string
+			for _, apiError := range *apiErrors {
+				errorMessages = append(errorMessages, apiError.Detail)
+			}
+			return nil, nil, fmt.Errorf("test execution error: %v", strings.Join(errorMessages, "; "))
+		}
+		return nil, nil, fmt.Errorf("test execution error: %v", "an unknown error occurred")
+	}
+
+	findingsData, complete, err := finalResult.Findings(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("Error fetching findings")
+		if !complete && len(findingsData) > 0 {
+			logger.Warn().Int("count", len(findingsData)).Msg("Partial findings retrieved as an error occurred")
+		}
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err)
+	}
+
+	if !complete {
+		if len(findingsData) > 0 {
+			logger.Warn().Int("count", len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
+		}
+		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
+	}
+
+	return finalResult, findingsData, nil
+}
+
+// writeJSON writes data to a JSON file
+func writeJSON(data interface{}, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", filename, err)
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("failed to write JSON to %s: %w", filename, err)
+	}
+
 	return nil
 }
