@@ -6,6 +6,6 @@ import (
 )
 
 type WorkflowClients struct {
-	TestAPIShim testshim.Client
-	FileUpload  upload.Client
+	TestAPIShim      *testshim.Client
+	FileUploadClient *upload.Client
 }
