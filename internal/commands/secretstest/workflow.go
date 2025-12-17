@@ -3,7 +3,6 @@ package secretstest
 import (
 	"context"
 	"fmt"
-	"os"
 	"runtime"
 	"time"
 
@@ -19,7 +18,7 @@ import (
 )
 
 const (
-	FeatureFlagIsSecretsEnabled = "feature_flag_is_secrets_enabled"
+	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
 	FindSecretFilesTimeout      = 5 * time.Second
 )
 
@@ -65,18 +64,11 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	// TODO: determine the input paths (default is .)
-	// should we be able to scan multiple inputs?
-	args := os.Args[1:]
-	cwd, err := os.Getwd()
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to read the current directory")
-		return nil, cli_errors.NewGeneralCLIFailureError("Unable to get input.")
-	}
-	inputPaths := DetermineInputPaths(args, cwd)
+	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
+	logger.Info().Strs("inputPaths", inputPaths).Msg("the input paths")
 
 	ignoreFiles := []string{".gitignore"}
-	findFilesCtx, cancelFindFiles := context.WithTimeout(context.Background(), FindSecretFilesTimeout)
+	findFilesCtx, cancelFindFiles := context.WithTimeout(ictx.Context(), FindSecretFilesTimeout)
 	defer cancelFindFiles()
 	globFilteredFiles := ff.StreamAllowedFiles(findFilesCtx, inputPaths, ignoreFiles, ff.GetCustomGlobIgnoreRules(), logger)
 
@@ -109,8 +101,7 @@ func SecretsWorkflow(
 
 	// TODO: here we need to pass all required clients (uploadapi, testshim)
 	// better to create a wrapper struct with all the required clients
-	ctx := context.Background()
-	err = runWorkflow(ctx, testShimClient, uploadClient, inputPaths, logger)
+	err = runWorkflow(ictx.Context(), testShimClient, uploadClient, inputPaths, logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
