@@ -75,8 +75,8 @@ func createMockInvocationCtx(t *testing.T, ctrl *gomock.Controller, engine workf
 	mockConfig.Set(configuration.API_URL, "https://api.snyk.io")
 
 	mockLogger := zerolog.Nop()
-
 	icontext := mocks.NewMockInvocationContext(ctrl)
+	icontext.EXPECT().Context().Return(t.Context()).AnyTimes()
 	icontext.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	icontext.EXPECT().GetEnhancedLogger().Return(&mockLogger).AnyTimes()
 	icontext.EXPECT().GetEngine().Return(engine).AnyTimes()
