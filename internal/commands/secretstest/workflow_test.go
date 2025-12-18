@@ -1,3 +1,4 @@
+//nolint:testpackage // whitebox testing the workflow
 package secretstest
 
 import (
@@ -28,7 +29,8 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 	}{
 		{
 			name: "feature flag disabled, returns error",
-			setup: func(_ *testing.T, _ *gomock.Controller, config configuration.Configuration, _ *WorkflowClients) {
+			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, _ *WorkflowClients) {
+				t.Helper()
 				config.Set(FeatureFlagIsSecretsEnabled, false)
 			},
 			wantErr: cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag."),
@@ -36,11 +38,15 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 		{
 			name: "feature flag enabled, does not return error",
 			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, mockClients *WorkflowClients) {
+				t.Helper()
 				config.Set(FeatureFlagIsSecretsEnabled, true)
 				tempDir := t.TempDir()
 				config.Set(configuration.INPUT_DIRECTORY, tempDir)
 
-				mockClients.FileUpload.(*uploadMocks.MockClient).EXPECT().
+				mockUploadClient, ok := mockClients.FileUpload.(*uploadMocks.MockClient)
+				require.True(t, ok, "mock upload client is not of the expected type")
+
+				mockUploadClient.EXPECT().
 					CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(fileupload.UploadResult{}, nil)
 
