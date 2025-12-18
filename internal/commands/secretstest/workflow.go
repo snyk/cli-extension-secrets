@@ -3,6 +3,7 @@ package secretstest
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -71,9 +72,16 @@ func SecretsWorkflow(
 	logger.Info().Strs("inputPaths", inputPaths).Msg("the input paths")
 
 	workingDir := config.GetString(configuration.WORKING_DIRECTORY)
+	if workingDir == "" {
+		getwd, gerr := os.Getwd()
+		if gerr != nil {
+			return nil, fmt.Errorf("could not get current working directory: %w", err)
+		}
+		workingDir = getwd
+	}
 	logger.Info().Str("workingDir", workingDir).Msg("the working dir")
 
-	clients, err := setupClients(ictx, logger)
+	clients, err := setupClients(ictx, orgID, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -95,8 +103,8 @@ func checkSecretsEnabled(config configuration.Configuration) error {
 	return nil
 }
 
-func setupClients(ictx workflow.InvocationContext, logger *zerolog.Logger) (*WorkflowClients, error) {
-	uploadClient, err := upload.NewClient(ictx)
+func setupClients(ictx workflow.InvocationContext, orgID string, logger *zerolog.Logger) (*WorkflowClients, error) {
+	uploadClient, err := upload.NewClient(ictx, orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create upload client")
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
@@ -121,25 +129,9 @@ func runWorkflow(
 	logger *zerolog.Logger,
 ) error {
 	logger.Debug().Msg("running secrets test workflow...")
+	uploadCtx, cancel := context.WithTimeout(ctx, FindSecretFilesTimeout)
+	defer cancel()
 
-	pathsChan := filter(ctx, inputPaths, logger)
-	uploadResult, err := clients.FileUploadClient.CreateRevisionFromChan(ctx, pathsChan, workingDir)
-	if err != nil {
-		return err
-	}
-
-	logger.Debug().Str("revisionID", uploadResult.RevisionID.String()).Msg("Upload result")
-
-	return nil
-}
-
-func filter(ctx context.Context, inputPaths []string, logger *zerolog.Logger) <-chan string {
-	ignoreFiles := []string{".gitignore"}
-	findFilesCtx, cancelFindFiles := context.WithTimeout(ctx, FindSecretFilesTimeout)
-	defer cancelFindFiles()
-	globFilteredFiles := ff.StreamAllowedFiles(findFilesCtx, inputPaths, ignoreFiles, ff.GetCustomGlobIgnoreRules(), logger)
-
-	// Specialised filtering based on content and file metadata
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
 		ff.WithFilters(
@@ -147,5 +139,13 @@ func filter(ctx context.Context, inputPaths []string, logger *zerolog.Logger) <-
 			ff.TextFileOnlyFilter(logger),
 		),
 	)
-	return textFilesFilter.Filter(findFilesCtx, globFilteredFiles)
+	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
+
+	uploadResult, err := clients.FileUploadClient.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
+	if err != nil {
+		return fmt.Errorf("error creating revision: %w", err)
+	}
+	logger.Debug().Str("revisionID", uploadResult.RevisionID.String()).Msg("Upload result")
+
+	return nil
 }
