@@ -1,6 +1,8 @@
 package upload
 
 import (
+	"context"
+
 	"github.com/google/uuid"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
@@ -8,18 +10,20 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-type Client struct {
+type Client interface {
+	CreateRevisionFromChan(ctx context.Context, paths <-chan string, baseDir string) (fileupload.UploadResult, error)
+}
+
+type FileUploadClient struct {
 	fileupload.Client
 }
 
-func NewClient(ictx workflow.InvocationContext, orgID string) (*Client, error) {
+func NewClient(ictx workflow.InvocationContext, orgID string) (*FileUploadClient, error) {
 	config := ictx.GetConfiguration()
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()
 	baseURL := config.GetString(configuration.API_URL)
 	cfg := fileupload.Config{BaseURL: baseURL, OrgID: uuid.MustParse(orgID)}
 
 	uploadClient := fileupload.NewClient(httpClient, cfg)
-	return &Client{
-		uploadClient,
-	}, nil
+	return &FileUploadClient{uploadClient}, nil
 }

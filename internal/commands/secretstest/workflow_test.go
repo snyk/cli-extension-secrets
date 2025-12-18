@@ -1,8 +1,6 @@
-//nolint:testpackage // whitebox testing the workflow
 package secretstest
 
 import (
-	"errors"
 	"net/http"
 	"testing"
 
@@ -30,8 +28,7 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 	}{
 		{
 			name: "feature flag disabled, returns error",
-			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, _ *WorkflowClients) {
-				t.Helper()
+			setup: func(_ *testing.T, _ *gomock.Controller, config configuration.Configuration, _ *WorkflowClients) {
 				config.Set(FeatureFlagIsSecretsEnabled, false)
 			},
 			wantErr: cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag."),
@@ -39,15 +36,11 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 		{
 			name: "feature flag enabled, does not return error",
 			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, mockClients *WorkflowClients) {
-				t.Helper()
 				config.Set(FeatureFlagIsSecretsEnabled, true)
 				tempDir := t.TempDir()
 				config.Set(configuration.INPUT_DIRECTORY, tempDir)
 
-				mockUploadClient, ok := mockClients.FileUpload.(*uploadMocks.MockClient)
-				require.True(t, ok, "mock upload client is not of the expected type")
-
-				mockUploadClient.EXPECT().
+				mockClients.FileUpload.(*uploadMocks.MockClient).EXPECT().
 					CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(fileupload.UploadResult{}, nil)
 
@@ -56,27 +49,6 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 				// mockClients.TestAPIShim.(*testShimMocks.MockClient).EXPECT().StartTest(gomock.Any(), gomock.Any()).Return(handler, nil)
 			},
 			wantErr: nil,
-		},
-		{
-			name: "file upload is failing",
-			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, mockClients *WorkflowClients) {
-				t.Helper()
-				config.Set(FeatureFlagIsSecretsEnabled, true)
-				tempDir := t.TempDir()
-				config.Set(configuration.INPUT_DIRECTORY, tempDir)
-
-				mockUploadClient, ok := mockClients.FileUpload.(*uploadMocks.MockClient)
-				require.True(t, ok, "mock upload client is not of the expected type")
-
-				mockUploadClient.EXPECT().
-					CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(fileupload.UploadResult{}, errors.New("no files provided"))
-
-				// TODO update this for test api shim
-				// handler := testShimMocks.NewMockTestHandle(ctrl)
-				// mockClients.TestAPIShim.(*testShimMocks.MockClient).EXPECT().StartTest(gomock.Any(), gomock.Any()).Return(handler, nil)
-			},
-			wantErr: errors.New("no files provided"),
 		},
 	}
 

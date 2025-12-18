@@ -49,9 +49,8 @@ func streamAllowedFiles(
 			localRules = append(localRules, customGlobPatterns...)
 			localRules = append(localRules, foundIgnoreRules...)
 
-			allFiles := filter.GetAllFiles()
-
 			//  Get the stream of allowed files.
+			allFiles := filter.GetAllFiles()
 			pathFileStream := filter.GetFilteredFiles(allFiles, localRules)
 
 			for file := range pathFileStream {

@@ -20,7 +20,7 @@ import (
 
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
-	UploadFilesTimeout          = 5 * time.Second
+	FindSecretFilesTimeout      = 5 * time.Minute
 )
 
 var (
@@ -75,13 +75,13 @@ func SecretsWorkflow(
 	if workingDir == "" {
 		getwd, gerr := os.Getwd()
 		if gerr != nil {
-			return nil, fmt.Errorf("could not get current working directory: %w", err)
+			return nil, fmt.Errorf("could not get current working directory: %w", gerr)
 		}
 		workingDir = getwd
 	}
 	logger.Info().Str("workingDir", workingDir).Msg("the working dir")
 
-	clients, err := setupClients(ictx, orgID, logger)
+	clients, err := setupClientsFn(ictx, orgID, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -116,8 +116,8 @@ func setupClients(ictx workflow.InvocationContext, orgID string, logger *zerolog
 	}
 
 	return &WorkflowClients{
-		TestAPIShim:      testShimClient,
-		FileUploadClient: uploadClient,
+		TestAPIShim: testShimClient,
+		FileUpload:  uploadClient,
 	}, nil
 }
 
@@ -129,8 +129,8 @@ func runWorkflow(
 	logger *zerolog.Logger,
 ) error {
 	logger.Debug().Msg("running secrets test workflow...")
-	uploadCtx, cancel := context.WithTimeout(ctx, FindSecretFilesTimeout)
-	defer cancel()
+	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FindSecretFilesTimeout)
+	defer cancelFindFiles()
 
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
@@ -141,10 +141,11 @@ func runWorkflow(
 	)
 	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
 
-	uploadResult, err := clients.FileUploadClient.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
+	uploadResult, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
 	if err != nil {
 		return fmt.Errorf("error creating revision: %w", err)
 	}
+
 	logger.Debug().Str("revisionID", uploadResult.RevisionID.String()).Msg("Upload result")
 
 	return nil
