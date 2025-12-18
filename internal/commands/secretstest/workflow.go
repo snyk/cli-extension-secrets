@@ -20,7 +20,7 @@ import (
 
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
-	FindSecretFilesTimeout      = 5 * time.Minute
+	FilterAndUploadFilesTimeout = 5 * time.Second
 )
 
 var (
@@ -129,7 +129,7 @@ func runWorkflow(
 	logger *zerolog.Logger,
 ) error {
 	logger.Debug().Msg("running secrets test workflow...")
-	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FindSecretFilesTimeout)
+	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FilterAndUploadFilesTimeout)
 	defer cancelFindFiles()
 
 	textFilesFilter := ff.NewPipeline(
