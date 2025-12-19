@@ -3,6 +3,7 @@ package secretstest
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime"
 	"time"
 
@@ -19,10 +20,13 @@ import (
 
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
-	FindSecretFilesTimeout      = 5 * time.Second
+	UploadFilesTimeout          = 5 * time.Second
 )
 
-var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
+var (
+	WorkflowID     = workflow.NewWorkflowIdentifier("secrets.test")
+	setupClientsFn = setupClients // internal for testing
+)
 
 func RegisterWorkflows(e workflow.Engine) error {
 	flagSet := GetSecretsTestFlagSet()
@@ -34,6 +38,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 	}
 
 	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsSecretsEnabled, "isSecretsEnabled")
+
 	return nil
 }
 
@@ -48,15 +53,8 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	// This will be removed after we enable the SCM Flows
 	if config.IsSet(FlagReport) {
 		return nil, cli_errors.NewFeatureUnderDevelopmentError("Flag --report is not yet supported.")
-	}
-
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
-		logger.Error().Msg("no org provided")
-		return nil, nil // TODO: error handling
 	}
 
 	err := validateFlagsConfig(config)
@@ -64,31 +62,49 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
+	orgID := config.GetString(configuration.ORGANIZATION)
+	if orgID == "" {
+		logger.Error().Msg("no org provided")
+		return nil, nil
+	}
+
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
 	logger.Info().Strs("inputPaths", inputPaths).Msg("the input paths")
 
-	ignoreFiles := []string{".gitignore"}
-	findFilesCtx, cancelFindFiles := context.WithTimeout(ictx.Context(), FindSecretFilesTimeout)
-	defer cancelFindFiles()
-	globFilteredFiles := ff.StreamAllowedFiles(findFilesCtx, inputPaths, ignoreFiles, ff.GetCustomGlobIgnoreRules(), logger)
+	workingDir := config.GetString(configuration.WORKING_DIRECTORY)
+	if workingDir == "" {
+		getwd, gerr := os.Getwd()
+		if gerr != nil {
+			return nil, fmt.Errorf("could not get current working directory: %w", gerr)
+		}
+		workingDir = getwd
+	}
+	logger.Info().Str("workingDir", workingDir).Msg("the working dir")
 
-	// Specialised filtering based on content and file metadata
-	textFilesFilter := ff.NewPipeline(
-		ff.WithConcurrency(runtime.NumCPU()),
-		ff.WithFilters(
-			ff.FileSizeFilter(logger),
-			ff.TextFileOnlyFilter(logger),
-		),
-	)
-	textFiles := textFilesFilter.Filter(globFilteredFiles)
-	for file := range textFiles {
-		logger.Debug().Msgf("Will upload '%s'", file)
+	clients, err := setupClientsFn(ictx, orgID, logger)
+	if err != nil {
+		return nil, err
 	}
 
-	// TODO: setup the clients
-	// 1. for the upload api
-	// 2. for the test-api-shim
-	uploadClient, err := upload.NewClient(ictx)
+	err = runWorkflow(ictx.Context(), clients, inputPaths, workingDir, logger)
+	if err != nil {
+		logger.Error().Err(err).Msg("workflow execution failed")
+		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
+	}
+
+	return nil, nil
+}
+
+func checkSecretsEnabled(config configuration.Configuration) error {
+	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
+		return cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag.")
+	}
+
+	return nil
+}
+
+func setupClients(ictx workflow.InvocationContext, orgID string, logger *zerolog.Logger) (*WorkflowClients, error) {
+	uploadClient, err := upload.NewClient(ictx, orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create upload client")
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
@@ -99,40 +115,38 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
 	}
 
-	// TODO: here we need to pass all required clients (uploadapi, testshim)
-	// better to create a wrapper struct with all the required clients
-	err = runWorkflow(ictx.Context(), testShimClient, uploadClient, inputPaths, logger)
-	if err != nil {
-		logger.Error().Err(err).Msg("workflow execution failed")
-		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
-	}
-
-	return nil, nil
+	return &WorkflowClients{
+		TestAPIShim: testShimClient,
+		FileUpload:  uploadClient,
+	}, nil
 }
 
-func checkSecretsEnabled(config configuration.Configuration) error {
-	// TODO: remove this after we're moving away from CB
-	// and add different checks for settings/entitlement (with different error as well)
-	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag.")
-	}
-
-	return nil
-}
-
-//nolint:unparam // TODO: remove this after adding the implem
 func runWorkflow(
-	_ context.Context,
-	_ *testshim.Client,
-	_ *upload.Client,
-	_ []string,
+	ctx context.Context,
+	clients *WorkflowClients,
+	inputPaths []string,
+	workingDir string,
 	logger *zerolog.Logger,
 ) error {
 	logger.Debug().Msg("running secrets test workflow...")
-	// TODO: create the revision via the upload client
-	// TODO: populate the subject struct (which is generated type from data-schema?)
-	// TODO: run the test on the subject via the testshim client (start the test, poll the test, get results)
-	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score#Solution
-	// TODO: handle the output (use the module provided by IDE/CLI team that works with data layer findings?)
+	uploadCtx, cancel := context.WithTimeout(ctx, UploadFilesTimeout)
+	defer cancel()
+
+	textFilesFilter := ff.NewPipeline(
+		ff.WithConcurrency(runtime.NumCPU()),
+		ff.WithFilters(
+			ff.FileSizeFilter(logger),
+			ff.TextFileOnlyFilter(logger),
+		),
+	)
+	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
+
+	uploadResult, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
+	if err != nil {
+		return fmt.Errorf("error creating revision: %w", err)
+	}
+
+	logger.Debug().Str("revisionID", uploadResult.RevisionID.String()).Msg("Upload result")
+
 	return nil
 }

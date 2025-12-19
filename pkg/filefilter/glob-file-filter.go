@@ -82,7 +82,7 @@ var ignoreGenericFilesGlob = []string{
 	"Database.refactorlog",
 }
 
-func GetCustomGlobIgnoreRules() []string {
+func getCustomGlobIgnoreRules() []string {
 	totalLen := len(ignoredExtensionsGlob) + len(ignoreGenericFilesGlob)
 	customRules := make([]string, 0, totalLen)
 

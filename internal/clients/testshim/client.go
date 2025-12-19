@@ -1,6 +1,7 @@
 package testshim
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -8,11 +9,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-type Client struct {
+// Client interface for the test shim API.
+type Client interface {
+	StartTest(ctx context.Context, params testapi.StartTestParams) (testapi.TestHandle, error)
+}
+
+type TestAPIClient struct {
 	testapi.TestClient
 }
 
-func NewClient(ictx workflow.InvocationContext) (*Client, error) {
+func NewClient(ictx workflow.InvocationContext) (*TestAPIClient, error) {
 	config := ictx.GetConfiguration()
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()
 	baseURL := config.GetString(configuration.API_URL)
@@ -27,7 +33,7 @@ func NewClient(ictx workflow.InvocationContext) (*Client, error) {
 		return nil, fmt.Errorf("failed to create test API client: %w", err)
 	}
 
-	return &Client{
+	return &TestAPIClient{
 		testShimClient,
 	}, nil
 }
