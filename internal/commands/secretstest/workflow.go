@@ -2,7 +2,6 @@ package secretstest
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -62,12 +61,13 @@ func SecretsWorkflow(
 	logger := ictx.GetEnhancedLogger()
 	//errFactory := errors.NewErrorFactory(logger)
 	progressBar := ictx.GetUserInterface().NewProgressBar()
+	
 	ctx = cmdctx.WithIctx(ctx, ictx)
 	ctx = cmdctx.WithConfig(ctx, config)
 	ctx = cmdctx.WithLogger(ctx, logger)
-	//ctx = cmdctx.WithErrorFactory(ctx, errFactory)
 	ctx = cmdctx.WithProgressBar(ctx, progressBar)
-//	ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
+	// ctx = cmdctx.WithErrorFactory(ctx, errFactory)
+	// ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
 
 	progressBar.SetTitle("Validating configuration...")
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
@@ -75,16 +75,6 @@ func SecretsWorkflow(
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
 	defer progressBar.Clear()
 
-	// Pretty print configuration
-	/*	settings := make(map[string]interface{})
-	for _, key := range config.AllKeys() {
-		settings[key] = config.Get(key)
-	}
-	configJSON, _ := json.MarshalIndent(settings, "", "  ")
-	fmt.Printf("SECRETS WF CONFIG  %s\n", string(configJSON))
-	
-	fmt.Printf("SECRETS WF ICTX Context  %v", ictx.Context());
-	*/
 	if err := checkSecretsEnabled(config); err != nil {
 		return nil, err
 	}
@@ -167,7 +157,6 @@ func runWorkflow(
 	orgID string,
 	inputPaths []string,
 	workingDir string,
-	//logger *zerolog.Logger,
 )  ([]workflow.Data, error) {
 	logger := cmdctx.Logger(ctx)
 	progressBar := cmdctx.ProgressBar(ctx)
@@ -196,85 +185,37 @@ func runWorkflow(
 	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
 	
 	repoUrl := "https://github.com/snyk/ancatest"  // TODO
-	rootFolderId := "."								// TODO
+	rootFolderId := "."							   // TODO
 	
-	uploadResource := testapi.UploadResource{
-		ContentType:   testapi.UploadResourceContentTypeSource,
-		FilePatterns:  []string{}, // TODO: add file patterns
-		RevisionId:    uploadRevision.RevisionID.String(),
-		RepositoryUrl: &repoUrl,
-		RootFolderId:  &rootFolderId,
-		Type:          testapi.Upload,
-	}
-	
-	var baseResourceVariant testapi.BaseResourceVariantCreateItem
-	if err := baseResourceVariant.FromUploadResource(uploadResource); err != nil {
-		return nil, fmt.Errorf("failed to create base resource variant: %w", err)
-	}
-
-	baseResource := testapi.BaseResourceCreateItem{
-		Resource: baseResourceVariant,
-		Type:     testapi.BaseResourceCreateItemTypeBase,
-	}
-
-	var testResource testapi.TestResourceCreateItem
-	if err := testResource.FromBaseResourceCreateItem(baseResource); err != nil {
-		return nil, fmt.Errorf("failed to create test resource: %w", err)
+	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoUrl, rootFolderId)
+	if err != nil {
+		return nil, err
 	}
 
 	param := testapi.StartTestParams{
 		OrgID:       orgID,
 		Resources:   &[]testapi.TestResourceCreateItem{testResource},
-		LocalPolicy: nil, // TODO what do we need here ?
+		LocalPolicy: nil,
 		ScanConfig: &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
 	}
 
 	progressBar.SetTitle("Scanning...")
-	//logger.Debug().Str("params", fmt.Sprintf("%+v", param)).Msg("Start test params")
 
 	// result and findings for later use
 	testResult, findings, err := executeTest(ctx, clients.TestAPIShim, param, logger)
-
+	progressBar.Clear();
 	if err != nil {
 		return nil, fmt.Errorf("failed test execution: %w", err)
-	}
-	logger.Debug().Msgf("Got test result", testResult)
-	logger.Debug().Msgf("Got test findings", findings)
-
-	progressBar.Clear();
+	}	
+	
+	logger.Debug().Msg("preparing output for secrets test workflow...")
 	
 	output, err := prepareOutput(ctx, findings, testResult);
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare output: %w", err)
 	}
-	logger.Debug().Msgf("Got output", output)
 	
 	return output,err; 
-
-	// TODO: map findings https://snyksec.atlassian.net/browse/PS-88
-
-	/*serializableResult, err := ufm.NewSerializableTestResult(ctx, testResult)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to create serializable test result")
-		return fmt.Errorf("failed to create serializable test result: %w", err)
-	}
-
-	if err := writeJSON(serializableResult, "df-test-result.json"); err != nil {
-		logger.Error().Err(err).Msg("failed to write test result")
-		return fmt.Errorf("failed to write test result: %w", err)
-	}
-
-	if err := writeJSON(findings, "df-findings.json"); err != nil {
-		logger.Error().Err(err).Msg("failed to write findings")
-		return fmt.Errorf("failed to write findings: %w", err)
-	}
-
-	logger.Info().Msg("wrote df-test-result.json and df-findings.json")
-*/
-	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score#Solution
-	// TODO: handle the output (use the module provided by IDE/CLI team that works with data layer findings?)
-
-	//return nil
 }
 
 //nolint:ireturn // Returns interface because implementation is private
@@ -337,15 +278,14 @@ func prepareOutput(
 	testResult testapi.TestResult,
 	) ([]workflow.Data, error) {
 	ictx := cmdctx.Ictx(ctx)
-	//cfg := cmdctx.Config(ctx)
 
 	var outputData []workflow.Data
 
 	// always output the test result
 	testResultData := ufm.CreateWorkflowDataFromTestResults(
 		ictx.GetWorkflowIdentifier(),
-		// workflow.NewWorkflowIdentifier("secrets-anca-test"),
 		 []testapi.TestResult{testResult})
+
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)
 	}
@@ -353,20 +293,30 @@ func prepareOutput(
 	return  outputData, nil
 }
 
-
-func writeJSON(data interface{}, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filename, err)
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-
-	if err := encoder.Encode(data); err != nil {
-		return fmt.Errorf("failed to write JSON to %s: %w", filename, err)
+func createTestResource(revisionID, repoUrl, rootFolderId string) (testapi.TestResourceCreateItem, error) {
+	uploadResource := testapi.UploadResource{
+		ContentType:   testapi.UploadResourceContentTypeSource,
+		FilePatterns:  []string{}, // TODO: add file patterns
+		RevisionId:    revisionID,
+		RepositoryUrl: &repoUrl,
+		RootFolderId:  &rootFolderId,
+		Type:          testapi.Upload,
 	}
 
-	return nil
+	var baseResourceVariant testapi.BaseResourceVariantCreateItem
+	if err := baseResourceVariant.FromUploadResource(uploadResource); err != nil {
+		return testapi.TestResourceCreateItem{}, fmt.Errorf("failed to create base resource variant: %w", err)
+	}
+
+	baseResource := testapi.BaseResourceCreateItem{
+		Resource: baseResourceVariant,
+		Type:     testapi.BaseResourceCreateItemTypeBase,
+	}
+
+	var testResource testapi.TestResourceCreateItem
+	if err := testResource.FromBaseResourceCreateItem(baseResource); err != nil {
+		return testapi.TestResourceCreateItem{}, fmt.Errorf("failed to create test resource: %w", err)
+	}
+
+	return testResource, nil
 }

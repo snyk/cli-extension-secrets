@@ -200,7 +200,7 @@ func TestRunWorkflow_Success(t *testing.T) {
 	uc := &upload.Client{}
 	logger := zerolog.Nop()
 
-	err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
+	_, err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
 
 	assert.NoError(t, err)
 	mockTestClient.AssertExpectations(t)
