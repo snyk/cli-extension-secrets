@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -56,8 +57,23 @@ func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,
 ) ([]workflow.Data, error) {
+	ctx := context.Background()
 	config := ictx.GetConfiguration()
 	logger := ictx.GetEnhancedLogger()
+	//errFactory := errors.NewErrorFactory(logger)
+	progressBar := ictx.GetUserInterface().NewProgressBar()
+	ctx = cmdctx.WithIctx(ctx, ictx)
+	ctx = cmdctx.WithConfig(ctx, config)
+	ctx = cmdctx.WithLogger(ctx, logger)
+	//ctx = cmdctx.WithErrorFactory(ctx, errFactory)
+	ctx = cmdctx.WithProgressBar(ctx, progressBar)
+//	ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
+
+	progressBar.SetTitle("Validating configuration...")
+	//nolint:errcheck // We don't need to fail the command due to UI errors.
+	progressBar.UpdateProgress(ui.InfiniteProgress)
+	//nolint:errcheck // We don't need to fail the command due to UI errors.
+	defer progressBar.Clear()
 
 	// Pretty print configuration
 	/*	settings := make(map[string]interface{})
@@ -106,12 +122,15 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	output, err := runWorkflow(ictx.Context(), clients, orgID,inputPaths, workingDir, logger)
+	output, err := runWorkflow(ctx, clients, orgID,inputPaths, workingDir)
 	
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
 	}
+	
+	//nolint:errcheck // We don't need to fail the command due to UI errors.
+	progressBar.Clear()
 
 	return output, nil
 }
@@ -148,9 +167,15 @@ func runWorkflow(
 	orgID string,
 	inputPaths []string,
 	workingDir string,
-	logger *zerolog.Logger,
+	//logger *zerolog.Logger,
 )  ([]workflow.Data, error) {
+	logger := cmdctx.Logger(ctx)
+	progressBar := cmdctx.ProgressBar(ctx)
+	//instrumentation := cmdctx.Instrumentation(ctx)
+
 	logger.Debug().Msg("running secrets test workflow...")
+	progressBar.SetTitle("Uploading files...")
+
 	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FilterAndUploadFilesTimeout)
 	defer cancelFindFiles()
 
@@ -204,7 +229,8 @@ func runWorkflow(
 		ScanConfig: &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
 	}
 
-	logger.Debug().Str("params", fmt.Sprintf("%+v", param)).Msg("Start test params")
+	progressBar.SetTitle("Scanning...")
+	//logger.Debug().Str("params", fmt.Sprintf("%+v", param)).Msg("Start test params")
 
 	// result and findings for later use
 	testResult, findings, err := executeTest(ctx, clients.TestAPIShim, param, logger)
@@ -215,6 +241,8 @@ func runWorkflow(
 	logger.Debug().Msgf("Got test result", testResult)
 	logger.Debug().Msgf("Got test findings", findings)
 
+	progressBar.Clear();
+	
 	output, err := prepareOutput(ctx, findings, testResult);
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare output: %w", err)
@@ -308,20 +336,20 @@ func prepareOutput(
 	findingsData []testapi.FindingData,
 	testResult testapi.TestResult,
 	) ([]workflow.Data, error) {
-	//ictx := cmdctx.Ictx(ctx)
-	cfg := cmdctx.Config(ctx)
+	ictx := cmdctx.Ictx(ctx)
+	//cfg := cmdctx.Config(ctx)
 
 	var outputData []workflow.Data
 
 	// always output the test result
 	testResultData := ufm.CreateWorkflowDataFromTestResults(
-		// TODO fix ctx
-		workflow.NewWorkflowIdentifier("secrets-anca-test"), []testapi.TestResult{testResult})
+		ictx.GetWorkflowIdentifier(),
+		// workflow.NewWorkflowIdentifier("secrets-anca-test"),
+		 []testapi.TestResult{testResult})
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)
 	}
 
-	fmt.Printf("CLI FLAGS configs %v\n\n", cfg)
 	return  outputData, nil
 }
 
