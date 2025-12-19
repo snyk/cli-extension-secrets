@@ -9,10 +9,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils"
 )
 
-// StreamAllowedFiles iterates over multiple input paths, applies rules from specific
+// streamAllowedFiles iterates over multiple input paths, applies rules from specific
 // ignore files (.gitignore) combined with rules from customGlobPatterns, and returns a single merged channel containing
 // only the file paths that are allowed (not ignored).
-func StreamAllowedFiles(
+func streamAllowedFiles(
 	ctx context.Context,
 	inputPaths []string,
 	ignoreFilenames []string,
@@ -50,7 +50,8 @@ func StreamAllowedFiles(
 			localRules = append(localRules, foundIgnoreRules...)
 
 			//  Get the stream of allowed files.
-			pathFileStream := filter.GetFilteredFiles(filter.GetAllFiles(), localRules)
+			allFiles := filter.GetAllFiles()
+			pathFileStream := filter.GetFilteredFiles(allFiles, localRules)
 
 			for file := range pathFileStream {
 				select {

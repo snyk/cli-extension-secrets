@@ -1,9 +1,14 @@
 package filefilter
 
 import (
+	"context"
 	"runtime"
 	"sync"
+
+	"github.com/rs/zerolog"
 )
+
+var ignoreFiles = []string{".gitignore"}
 
 // FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {
@@ -51,7 +56,9 @@ func WithFilters(filters ...FileFilter) Option {
 
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
-func (p *Pipeline) Filter(files <-chan string) chan string {
+func (p *Pipeline) Filter(ctx context.Context, inputPaths []string, logger *zerolog.Logger) chan string {
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, getCustomGlobIgnoreRules(), logger)
+
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)
 	var wg sync.WaitGroup
@@ -61,6 +68,9 @@ func (p *Pipeline) Filter(files <-chan string) chan string {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			if ctx.Err() != nil {
+				return
+			}
 
 			// Iterate over incoming paths
 			for path := range files {
@@ -75,7 +85,11 @@ func (p *Pipeline) Filter(files <-chan string) chan string {
 				}
 
 				if keep {
-					filteredFiles <- path
+					select {
+					case filteredFiles <- path:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}
 		}()

@@ -3,3 +3,5 @@
 ### Go Patch ###
 /vendor/
 /Godeps/
+
+.idea

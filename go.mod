@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/snyk/error-catalog-golang-public v0.0.0-20251205100923-e93b06d4a6c6
-	github.com/snyk/go-application-framework v0.0.0-20251209131634-fa77f8c14fa3
+	github.com/snyk/go-application-framework v0.0.0-20251217153727-e90bc955133b
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 )
@@ -93,3 +93,5 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+//replace github.com/snyk/go-application-framework => ../go-application-framework

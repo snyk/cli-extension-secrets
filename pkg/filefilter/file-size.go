@@ -1,4 +1,3 @@
-//nolint:ireturn // Returns interface because implementation is private
 package filefilter
 
 import (
@@ -15,6 +14,7 @@ type fileSizeFilter struct {
 	logger *zerolog.Logger
 }
 
+//nolint:ireturn // Returns interface because implementation is private
 func FileSizeFilter(logger *zerolog.Logger) FileFilter {
 	return &fileSizeFilter{
 		logger: logger,

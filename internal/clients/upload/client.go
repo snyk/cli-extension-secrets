@@ -1,13 +1,35 @@
 package upload
 
-import "github.com/snyk/go-application-framework/pkg/workflow"
+import (
+	"context"
+	"fmt"
 
-type Client struct {
-	// TODO: use the client provided by them (if any?)
-	// or write one directly on top of the http client like
-	// https://github.com/snyk/cli-extension-os-flows/blob/d279e5c83acaf21f3c6a2ba4849ffe8e274b577b/internal/bundlestore/client.go#L19-L31
+	"github.com/google/uuid"
+
+	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+)
+
+type Client interface {
+	CreateRevisionFromChan(ctx context.Context, paths <-chan string, baseDir string) (fileupload.UploadResult, error)
 }
 
-func NewClient(_ workflow.InvocationContext) (*Client, error) {
-	return &Client{}, nil
+type FileUploadClient struct {
+	fileupload.Client
+}
+
+func NewClient(ictx workflow.InvocationContext, orgID string) (*FileUploadClient, error) {
+	org, err := uuid.Parse(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse orgID: %s: %w", orgID, err)
+	}
+
+	config := ictx.GetConfiguration()
+	httpClient := ictx.GetNetworkAccess().GetHttpClient()
+	baseURL := config.GetString(configuration.API_URL)
+	cfg := fileupload.Config{BaseURL: baseURL, OrgID: org}
+
+	uploadClient := fileupload.NewClient(httpClient, cfg, fileupload.WithLogger(ictx.GetEnhancedLogger()))
+	return &FileUploadClient{uploadClient}, nil
 }

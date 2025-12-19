@@ -3,9 +3,16 @@ package filefilter
 
 import (
 	"fmt"
+	"os"
+	"path"
+	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/rs/zerolog"
 )
 
 // mockFilter implements FileFilter for testing purposes.
@@ -18,17 +25,6 @@ func (m *mockFilter) FilterOut(path string) bool {
 		return false
 	}
 	return m.fn(path)
-}
-
-// feeds a slice into a channel and closes it.
-func sliceToChan(inputs []string) chan string {
-	// Buffer size equals length to prevent blocking during setup.
-	ch := make(chan string, len(inputs))
-	for _, i := range inputs {
-		ch <- i
-	}
-	close(ch)
-	return ch
 }
 
 // chanToSlice collects all items from a channel into a slice.
@@ -46,38 +42,43 @@ func sortStrings(s []string) {
 }
 
 func TestFilter_Logic(t *testing.T) {
+	logger := newTestLogger()
+
 	// Setup standard input paths
-	inputPaths := []string{
-		"keep_me.txt",
-		"drop_binary.exe",
-		"drop_vendor/lib.js",
-		"keep_me_too.go",
+	inputFiles := map[string]string{
+		"keep_me.txt":        "test content",
+		"drop_binary.exe":    "test content",
+		"drop_vendor/lib.js": "test content",
+		"keep_me_too.go":     "test content",
+	}
+	dirPath := setupTempDir(t, inputFiles)
+	var inputPaths []string
+	for k := range inputFiles {
+		inputPaths = append(inputPaths, filepath.Join(dirPath, k))
 	}
 
 	// Drops .exe files
 	exeFilter := &mockFilter{
 		fn: func(path string) bool {
-			return path == "drop_binary.exe"
+			return strings.Contains(path, "drop_binary.exe")
 		},
 	}
 
 	// Drops vendor folder
 	vendorFilter := &mockFilter{
 		fn: func(path string) bool {
-			return path == "drop_vendor/lib.js"
+			return strings.Contains(path, "drop_vendor/lib.js")
 		},
 	}
 
 	t.Run("Single Filter", func(t *testing.T) {
-		inputChan := sliceToChan(inputPaths)
-
 		// Use Pipeline with 2 workers
 		pipeline := NewPipeline(
 			WithConcurrency(2),
 			WithFilters(exeFilter),
 		)
 
-		outChan := pipeline.Filter(inputChan)
+		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
 		results := chanToSlice(outChan)
 
 		// Sort results because concurrent workers do not guarantee order
@@ -87,7 +88,7 @@ func TestFilter_Logic(t *testing.T) {
 			t.Fatalf("got %d files, want 3", len(results))
 		}
 
-		expected := []string{"drop_vendor/lib.js", "keep_me.txt", "keep_me_too.go"}
+		expected := []string{path.Join(dirPath, "drop_vendor/lib.js"), path.Join(dirPath, "keep_me.txt"), path.Join(dirPath, "keep_me_too.go")}
 		for i, want := range expected {
 			if results[i] != want {
 				t.Errorf("index %d: got path %q, want %q", i, results[i], want)
@@ -96,15 +97,13 @@ func TestFilter_Logic(t *testing.T) {
 	})
 
 	t.Run("Multiple Filters (Short Circuiting)", func(t *testing.T) {
-		inputChan := sliceToChan(inputPaths)
-
 		// Use Pipeline with 4 workers and multiple filters
 		pipeline := NewPipeline(
 			WithConcurrency(4),
 			WithFilters(exeFilter, vendorFilter),
 		)
 
-		outChan := pipeline.Filter(inputChan)
+		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
 		results := chanToSlice(outChan)
 
 		sortStrings(results)
@@ -113,7 +112,7 @@ func TestFilter_Logic(t *testing.T) {
 			t.Fatalf("got %d files, want 2", len(results))
 		}
 
-		expected := []string{"keep_me.txt", "keep_me_too.go"}
+		expected := []string{path.Join(dirPath, "keep_me.txt"), path.Join(dirPath, "keep_me_too.go")}
 		for i, want := range expected {
 			if results[i] != want {
 				t.Errorf("index %d: got path %q, want %q", i, results[i], want)
@@ -122,15 +121,12 @@ func TestFilter_Logic(t *testing.T) {
 	})
 
 	t.Run("Empty Input", func(t *testing.T) {
-		// Empty channel.
-		inputChan := sliceToChan([]string{})
-
 		pipeline := NewPipeline(
 			WithConcurrency(1),
 			WithFilters(exeFilter),
 		)
 
-		outChan := pipeline.Filter(inputChan)
+		outChan := pipeline.Filter(t.Context(), []string{}, &logger)
 		results := chanToSlice(outChan)
 
 		if len(results) != 0 {
@@ -192,13 +188,20 @@ func TestPipeline_Configuration(t *testing.T) {
 // Run this with 'go test -race'.
 func TestFilter_ConcurrencyStress(t *testing.T) {
 	count := 10000
-	inputChan := make(chan string, count)
+	inputFiles := map[string]string{}
+	logger := newTestLogger()
 
 	// Generate massive input.
 	for i := 0; i < count; i++ {
-		inputChan <- fmt.Sprintf("file-%d", i)
+		inputFiles[fmt.Sprintf("file-%d", i)] = "test content"
 	}
-	close(inputChan)
+
+	dirPath := setupTempDir(t, inputFiles)
+
+	var inputPaths []string
+	for k := range inputFiles {
+		inputPaths = append(inputPaths, filepath.Join(dirPath, k))
+	}
 
 	// A filter that keeps everything.
 	passAllFilter := &mockFilter{
@@ -211,7 +214,7 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 		WithFilters(passAllFilter),
 	)
 
-	outChan := pipeline.Filter(inputChan)
+	outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
 
 	// Collect results.
 	results := chanToSlice(outChan)
@@ -220,4 +223,12 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 	if len(results) != count {
 		t.Errorf("Stress test failed: Should return all files. Got %d, want %d", len(results), count)
 	}
+}
+
+func newTestLogger() zerolog.Logger {
+	return zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.Kitchen}).
+		Level(zerolog.DebugLevel).
+		With().
+		Timestamp().
+		Logger()
 }
