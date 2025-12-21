@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -15,10 +14,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+
+	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 )
 
 // MockTestClient implements testapi.TestClient.
@@ -234,8 +234,8 @@ func TestRunWorkflow_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
-	
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
+
 	// Setup expectations.
 	uploadResult := fileupload.UploadResult{
 		RevisionID: uuid.New(),
@@ -243,31 +243,26 @@ func TestRunWorkflow_Success(t *testing.T) {
 
 	mockProgressBar.On("SetTitle", mock.Anything).Return()
 	mockProgressBar.On("Clear").Return(nil)
-	
+
 	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
-	
+
 	testID := uuid.New()
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
-	
+
 	mockTestHandle.On("Wait", mock.Anything).Return(nil)
 	mockTestHandle.On("Result").Return(mockTestResult)
 
 	findingContent, err := os.ReadFile("mocks/finding.json")
-    if err != nil {
-        fmt.Printf("Error reading file: %v\n", err)
-        return
-    }
-
-    // 2. Prepare the target struct
-    var findings []testapi.FindingData;
-
-    // 3. Unmarshal the bytes into the struct
-    // Note: You MUST pass a pointer (&conf) so the function can modify it
-    err = json.Unmarshal(findingContent, &findings)
 	if err != nil {
-        fmt.Printf("Error unmarshalling JSON: %v\n", err)
-        return
-    }	
+		t.Fatalf("Error reading mock file: %v", err)
+	}
+
+	var findings []testapi.FindingData
+
+	err = json.Unmarshal(findingContent, &findings)
+	if err != nil {
+		t.Fatal("Error unmarshalling JSON mock")
+	}
 
 	mockTestResult.On("GetTestID").Return(&testID)
 	mockTestResult.On("GetTestConfiguration").Return(&testapi.TestConfiguration{})
@@ -278,20 +273,19 @@ func TestRunWorkflow_Success(t *testing.T) {
 	mockTestResult.On("GetTestResources").Return(&[]testapi.TestResource{})
 	mockTestResult.On("GetSubjectLocators").Return(&[]testapi.TestSubjectLocator{})
 	mockTestResult.On("GetErrors").Return(&[]testapi.IoSnykApiCommonError{})
-	
+
 	ctx := t.Context()
 	logger := zerolog.Nop()
 	ctx = cmdctx.WithLogger(ctx, &logger)
 	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
 	ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
-	
+
 	clients := &WorkflowClients{
 		TestAPIShim: mockTestClient,
 		FileUpload:  mockUploadClient,
 	}
 
 	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
-
 
 	assert.NoError(t, err)
 	mockTestClient.AssertExpectations(t)
@@ -307,7 +301,7 @@ func TestRunWorkflow_StartTestError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
 
 	// Setup expectations.
 	uploadResult := fileupload.UploadResult{
@@ -316,12 +310,12 @@ func TestRunWorkflow_StartTestError(t *testing.T) {
 
 	mockProgressBar.On("SetTitle", mock.Anything).Return()
 	mockProgressBar.On("Clear").Return(nil)
-	
+
 	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(nil, errors.New("start error"))
 
 	ctx := t.Context()
-	
+
 	logger := zerolog.Nop()
 	ctx = cmdctx.WithLogger(ctx, &logger)
 	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
@@ -348,7 +342,7 @@ func TestRunWorkflow_WaitError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
 	uploadResult := fileupload.UploadResult{
 		RevisionID: uuid.New(),
 	}
@@ -389,12 +383,11 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
 	mockEngine := mocks.NewMockEngine(ctrl)
-	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
 
 	uploadResult := fileupload.UploadResult{
 		RevisionID: uuid.New(),
 	}
-
 
 	// Setup expectations.
 	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
@@ -431,4 +424,3 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestHandle.AssertExpectations(t)
 	mockTestResult.AssertExpectations(t)
 }
-

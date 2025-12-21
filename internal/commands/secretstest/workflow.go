@@ -2,7 +2,6 @@ package secretstest
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -36,9 +35,6 @@ var (
 	setupClientsFn = setupClients // internal for testing
 )
 
-// makeTestShimClient allows mocking the test shim client creation in tests.
-var makeTestShimClient = testshim.NewClient
-
 func RegisterWorkflows(e workflow.Engine) error {
 	flagSet := GetSecretsTestFlagSet()
 
@@ -60,15 +56,15 @@ func SecretsWorkflow(
 	ctx := context.Background()
 	config := ictx.GetConfiguration()
 	logger := ictx.GetEnhancedLogger()
-	//errFactory := errors.NewErrorFactory(logger)
+	// TODO errFactory := errors.NewErrorFactory(logger)
 	progressBar := ictx.GetUserInterface().NewProgressBar()
-	
+
 	ctx = cmdctx.WithIctx(ctx, ictx)
 	ctx = cmdctx.WithConfig(ctx, config)
 	ctx = cmdctx.WithLogger(ctx, logger)
 	ctx = cmdctx.WithProgressBar(ctx, progressBar)
-	// ctx = cmdctx.WithErrorFactory(ctx, errFactory)
-	// ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
+	// TODO ctx = cmdctx.WithErrorFactory(ctx, errFactory)
+	// TODO ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
 
 	progressBar.SetTitle("Validating configuration...")
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
@@ -113,13 +109,12 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	output, err := runWorkflow(ctx, clients, orgID,inputPaths, workingDir)
-	
+	output, err := runWorkflow(ctx, clients, orgID, inputPaths, workingDir)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
 	}
-	
+
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
 	progressBar.Clear()
 
@@ -158,10 +153,10 @@ func runWorkflow(
 	orgID string,
 	inputPaths []string,
 	workingDir string,
-)  ([]workflow.Data, error) {
+) ([]workflow.Data, error) {
 	logger := cmdctx.Logger(ctx)
 	progressBar := cmdctx.ProgressBar(ctx)
-	//instrumentation := cmdctx.Instrumentation(ctx)
+	// TODO instrumentation := cmdctx.Instrumentation(ctx)
 
 	logger.Debug().Msg("running secrets test workflow...")
 	progressBar.SetTitle("Uploading files...")
@@ -184,11 +179,11 @@ func runWorkflow(
 	}
 
 	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
-	
-	repoUrl := "https://github.com/snyk/ancatest"  // TODO
-	rootFolderId := "."							   // TODO
-	
-	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoUrl, rootFolderId)
+
+	repoURL := "https://github.com/snyk/ancatest" // TODO git repo url
+	rootFolderID := "."                           // TODO root folder id
+
+	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoURL, rootFolderID)
 	if err != nil {
 		return nil, err
 	}
@@ -197,26 +192,28 @@ func runWorkflow(
 		OrgID:       orgID,
 		Resources:   &[]testapi.TestResourceCreateItem{testResource},
 		LocalPolicy: nil,
-		ScanConfig: &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
+		ScanConfig:  &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
 	}
 
 	progressBar.SetTitle("Scanning...")
 
 	// result and findings for later use
 	testResult, err := executeTest(ctx, clients.TestAPIShim, param, logger)
-	progressBar.Clear();
+	//nolint:errcheck // We don't need to fail the command due to UI errors.
+	progressBar.Clear()
+
 	if err != nil {
 		return nil, fmt.Errorf("failed test execution: %w", err)
-	}	
-	
+	}
+
 	logger.Debug().Msg("preparing output for secrets test workflow...")
-	
-	output, err := prepareOutput(ctx, testResult);
+
+	output, err := prepareOutput(ctx, testResult)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare output: %w", err)
 	}
-	
-	return output,err; 
+
+	return output, err
 }
 
 //nolint:ireturn // Returns interface because implementation is private
@@ -253,7 +250,6 @@ func executeTest(ctx context.Context,
 
 	// Get findings for the test
 	findingsData, complete, err := finalResult.Findings(ctx)
-	
 	if err != nil {
 		logger.Error().Err(err).Msg("Error fetching findings")
 		if !complete && len(findingsData) > 0 {
@@ -269,51 +265,38 @@ func executeTest(ctx context.Context,
 		return finalResult, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
 	}
 
-
-	d, err := json.Marshal(findingsData)
-    if err != nil {
-        fmt.Println("Error:", err)
-        //return
-    }
-
-    // Convert []byte to string to print it
-    
-	logger.Warn().Msgf("----AICI %s", d);
 	return finalResult, nil
-
 }
-
 
 func prepareOutput(
 	ctx context.Context,
 	testResult testapi.TestResult,
-	) ([]workflow.Data, error) {
+) ([]workflow.Data, error) {
+	var outputData []workflow.Data
 	ictx := cmdctx.Ictx(ctx)
 
-	var outputData []workflow.Data
-
-	
-
-
+	if ictx == nil {
+		return nil, fmt.Errorf("invocation context is nil")
+	}
 	// always output the test result
 	testResultData := ufm.CreateWorkflowDataFromTestResults(
 		ictx.GetWorkflowIdentifier(),
-		 []testapi.TestResult{testResult})
+		[]testapi.TestResult{testResult})
 
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)
 	}
 
-	return  outputData, nil
+	return outputData, nil
 }
 
-func createTestResource(revisionID, repoUrl, rootFolderId string) (testapi.TestResourceCreateItem, error) {
+func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestResourceCreateItem, error) {
 	uploadResource := testapi.UploadResource{
 		ContentType:   testapi.UploadResourceContentTypeSource,
 		FilePatterns:  []string{}, // TODO: add file patterns
 		RevisionId:    revisionID,
-		RepositoryUrl: &repoUrl,
-		RootFolderId:  &rootFolderId,
+		RepositoryUrl: &repoURL,
+		RootFolderId:  &rootFolderID,
 		Type:          testapi.Upload,
 	}
 

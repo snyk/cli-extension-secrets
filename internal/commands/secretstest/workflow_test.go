@@ -15,10 +15,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	testShimMocks "github.com/snyk/cli-extension-secrets/internal/clients/testshim/mocks"
 	uploadMocks "github.com/snyk/cli-extension-secrets/internal/clients/upload/mocks"
+	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 )
 
 func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
@@ -60,8 +62,19 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			mockProgressBar := new(MockProgressBar)
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
+
+			mockEngine := mocks.NewMockEngine(ctrl)
+			mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
+
+			ctx := t.Context()
+			logger := zerolog.Nop()
+			ctx = cmdctx.WithLogger(ctx, &logger)
+			ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
+			ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
+			mockInvocationCtx.EXPECT().Context().Return(ctx).AnyTimes()
 
 			mockClients := &WorkflowClients{
 				FileUpload:  uploadMocks.NewMockClient(ctrl),
@@ -76,9 +89,6 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 			t.Cleanup(func() {
 				setupClientsFn = originalSetupClientsFn
 			})
-
-			mockEngine := mocks.NewMockEngine(ctrl)
-			mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
 
 			// Setup test case
 			test.setup(t, ctrl, mockInvocationCtx.GetConfiguration(), mockClients)
@@ -117,6 +127,14 @@ func createMockInvocationCtx(t *testing.T, ctrl *gomock.Controller, engine workf
 	mockNetwork := mocks.NewMockNetworkAccess(ctrl)
 	mockNetwork.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
 	icontext.EXPECT().GetNetworkAccess().Return(mockNetwork).AnyTimes()
+
+	mockUI := mocks.NewMockUserInterface(ctrl)
+	mockPB := new(MockProgressBar)
+	mockPB.On("SetTitle", mock.Anything).Return()
+	mockPB.On("UpdateProgress", mock.Anything).Return(nil)
+	mockPB.On("Clear").Return(nil)
+	mockUI.EXPECT().NewProgressBar().Return(mockPB).AnyTimes()
+	icontext.EXPECT().GetUserInterface().Return(mockUI).AnyTimes()
 
 	return icontext
 }

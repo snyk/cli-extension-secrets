@@ -56,6 +56,8 @@ func WithInstrumentation(ctx context.Context, instrumentation instrumentation.In
 
 // Ictx will retrieve the invocation context from the command context.
 // It will return `nil` if the value wasn't set on the context.
+//
+//nolint:ireturn // Returns interface because implementation is private
 func Ictx(ctx context.Context) workflow.InvocationContext {
 	if ictx, ok := ctx.Value(IctxKey).(workflow.InvocationContext); ok {
 		return ictx
@@ -65,6 +67,8 @@ func Ictx(ctx context.Context) workflow.InvocationContext {
 
 // Config will retrieve the config from the command context.
 // It will return `nil` if the value wasn't set on the context.
+//
+//nolint:ireturn // Returns interface because implementation is private
 func Config(ctx context.Context) configuration.Configuration {
 	if cfg, ok := ctx.Value(ConfigKey).(configuration.Configuration); ok {
 		return cfg
@@ -93,6 +97,8 @@ func ErrorFactory(ctx context.Context) *errors.ErrorFactory {
 
 // ProgressBar will retrieve the progress bar from the command context.
 // It will return `nil` if the value wasn't set on the context.
+//
+//nolint:ireturn // Returns interface because implementation is private
 func ProgressBar(ctx context.Context) ui.ProgressBar {
 	if progressBar, ok := ctx.Value(ProgressBarKey).(ui.ProgressBar); ok {
 		return progressBar
