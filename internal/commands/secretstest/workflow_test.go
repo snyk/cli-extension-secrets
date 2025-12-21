@@ -113,6 +113,7 @@ func createMockInvocationCtx(t *testing.T, ctrl *gomock.Controller, engine workf
 	icontext.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	icontext.EXPECT().GetEnhancedLogger().Return(&mockLogger).AnyTimes()
 	icontext.EXPECT().GetEngine().Return(engine).AnyTimes()
+	icontext.EXPECT().GetWorkflowIdentifier().Return(workflow.NewWorkflowIdentifier("secrets.test")).AnyTimes()
 	mockNetwork := mocks.NewMockNetworkAccess(ctrl)
 	mockNetwork.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
 	icontext.EXPECT().GetNetworkAccess().Return(mockNetwork).AnyTimes()

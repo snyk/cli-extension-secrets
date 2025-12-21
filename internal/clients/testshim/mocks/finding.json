@@ -1,0 +1,53 @@
+[
+  {
+    "attributes": {
+      "cause_of_failure": false,
+      "description": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+      "evidence": [],
+      "finding_type": "secret",
+      "key": "20e7fb6c-c576-59d2-b0fb-838472e5a9e0",
+      "locations": [
+        {
+          "file_path": "gcp-credentials.json",
+          "from_column": 20,
+          "from_line": 7,
+          "to_column": 1749,
+          "to_line": 7,
+          "type": "source"
+        },
+        {
+          "file_path": "gcp-credentials.json",
+          "from_column": 26,
+          "from_line": 13,
+          "to_column": 1755,
+          "to_line": 13,
+          "type": "source"
+        }
+      ],
+      "policy_modifications": [
+        { "pointer": "/attributes/rating/severity", "reason": "" }
+      ],
+      "problems": [
+        {
+          "categories": ["Security"],
+          "help": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+          "id": "private-key",
+          "name": "Private Key",
+          "precision": "very-high",
+          "severity": "high",
+          "short_description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+          "source": "secret",
+          "tags": []
+        },
+        { "id": "CWE-321", "source": "cwe" }
+      ],
+      "rating": { "severity": "critical" },
+      "risk": {},
+      "title": "Private Key"
+    },
+    "id": "bdaa4c47-9609-435c-80ef-317586c3a97a",
+    "links": {},
+    "relationships": {},
+    "type": "findings"
+  }
+]

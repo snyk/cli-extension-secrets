@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/snyk/cli-extension-os-flows/internal/snykclient"
+	"github.com/snyk/cli-extension-secrets/internal/clients/snykclient"
 )
 
 func TestNewSnykClient(t *testing.T) {

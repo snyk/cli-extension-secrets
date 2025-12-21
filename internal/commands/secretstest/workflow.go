@@ -2,6 +2,7 @@ package secretstest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"runtime"
@@ -202,7 +203,7 @@ func runWorkflow(
 	progressBar.SetTitle("Scanning...")
 
 	// result and findings for later use
-	testResult, findings, err := executeTest(ctx, clients.TestAPIShim, param, logger)
+	testResult, err := executeTest(ctx, clients.TestAPIShim, param, logger)
 	progressBar.Clear();
 	if err != nil {
 		return nil, fmt.Errorf("failed test execution: %w", err)
@@ -210,7 +211,7 @@ func runWorkflow(
 	
 	logger.Debug().Msg("preparing output for secrets test workflow...")
 	
-	output, err := prepareOutput(ctx, findings, testResult);
+	output, err := prepareOutput(ctx, testResult);
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare output: %w", err)
 	}
@@ -223,19 +224,19 @@ func executeTest(ctx context.Context,
 	testClient testapi.TestClient,
 	testParam testapi.StartTestParams,
 	logger *zerolog.Logger,
-) (testapi.TestResult, []testapi.FindingData, error) {
+) (testapi.TestResult, error) {
 	testHandle, err := testClient.StartTest(ctx, testParam)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start test: %w", err)
+		return nil, fmt.Errorf("failed to start test: %w", err)
 	}
 
 	if waitErr := testHandle.Wait(ctx); waitErr != nil {
-		return nil, nil, fmt.Errorf("test run failed: %w", waitErr)
+		return nil, fmt.Errorf("test run failed: %w", waitErr)
 	}
 
 	finalResult := testHandle.Result()
 	if finalResult == nil {
-		return nil, nil, fmt.Errorf("test completed but no result was returned")
+		return nil, fmt.Errorf("test completed but no result was returned")
 	}
 
 	if finalResult.GetExecutionState() == testapi.TestExecutionStatesErrored {
@@ -245,41 +246,54 @@ func executeTest(ctx context.Context,
 			for _, apiError := range *apiErrors {
 				errorMessages = append(errorMessages, apiError.Detail)
 			}
-			return nil, nil, fmt.Errorf("test execution error: %v", strings.Join(errorMessages, "; "))
+			return nil, fmt.Errorf("test execution error: %v", strings.Join(errorMessages, "; "))
 		}
-		return nil, nil, fmt.Errorf("test execution error: %v", "an unknown error occurred")
+		return nil, fmt.Errorf("test execution error: %v", "an unknown error occurred")
 	}
 
 	// Get findings for the test
 	findingsData, complete, err := finalResult.Findings(ctx)
+	
 	if err != nil {
 		logger.Error().Err(err).Msg("Error fetching findings")
 		if !complete && len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved as an error occurred")
 		}
-		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err)
+		return finalResult, fmt.Errorf("test execution error: test completed but findings could not be retrieved: %w", err)
 	}
 
 	if !complete {
 		if len(findingsData) > 0 {
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
 		}
-		return finalResult, findingsData, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
+		return finalResult, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
 	}
 
-	return finalResult, findingsData, nil
+
+	d, err := json.Marshal(findingsData)
+    if err != nil {
+        fmt.Println("Error:", err)
+        //return
+    }
+
+    // Convert []byte to string to print it
+    
+	logger.Warn().Msgf("----AICI %s", d);
+	return finalResult, nil
 
 }
 
 
 func prepareOutput(
 	ctx context.Context,
-	findingsData []testapi.FindingData,
 	testResult testapi.TestResult,
 	) ([]workflow.Data, error) {
 	ictx := cmdctx.Ictx(ctx)
 
 	var outputData []workflow.Data
+
+	
+
 
 	// always output the test result
 	testResultData := ufm.CreateWorkflowDataFromTestResults(

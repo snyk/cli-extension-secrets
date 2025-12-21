@@ -2,19 +2,23 @@ package secretstest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
+	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
+	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-
-	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
-	"github.com/snyk/cli-extension-secrets/internal/clients/upload"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 )
 
 // MockTestClient implements testapi.TestClient.
@@ -183,24 +187,111 @@ func (m *MockTestResult) Findings(ctx context.Context) ([]testapi.FindingData, b
 	return args.Get(0).([]testapi.FindingData), args.Bool(1), args.Error(2)
 }
 
+func (m *MockTestResult) GetTestFacts() *[]testapi.TestFact {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).(*[]testapi.TestFact)
+}
+
+// MockUploadClient implements upload.Client.
+type MockUploadClient struct {
+	mock.Mock
+}
+
+func (m *MockUploadClient) CreateRevisionFromChan(ctx context.Context, paths <-chan string, baseDir string) (fileupload.UploadResult, error) {
+	args := m.Called(ctx, paths, baseDir)
+	return args.Get(0).(fileupload.UploadResult), args.Error(1)
+}
+
+// MockProgressBar implements ui.ProgressBar.
+type MockProgressBar struct {
+	mock.Mock
+}
+
+func (m *MockProgressBar) SetTitle(title string) {
+	m.Called(title)
+}
+
+func (m *MockProgressBar) UpdateProgress(progress float64) error {
+	args := m.Called(progress)
+	return args.Error(0)
+}
+
+func (m *MockProgressBar) Clear() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 func TestRunWorkflow_Success(t *testing.T) {
 	mockTestClient := new(MockTestClient)
 	mockTestHandle := new(MockTestHandle)
 	mockTestResult := new(MockTestResult)
+	mockUploadClient := new(MockUploadClient)
+	mockProgressBar := new(MockProgressBar)
 
+	ctrl := gomock.NewController(t)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+	
 	// Setup expectations.
+	uploadResult := fileupload.UploadResult{
+		RevisionID: uuid.New(),
+	}
+
+	mockProgressBar.On("SetTitle", mock.Anything).Return()
+	mockProgressBar.On("Clear").Return(nil)
+	
+	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
+	
+	testID := uuid.New()
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
+	
 	mockTestHandle.On("Wait", mock.Anything).Return(nil)
 	mockTestHandle.On("Result").Return(mockTestResult)
+
+	findingContent, err := os.ReadFile("mocks/finding.json")
+    if err != nil {
+        fmt.Printf("Error reading file: %v\n", err)
+        return
+    }
+
+    // 2. Prepare the target struct
+    var findings []testapi.FindingData;
+
+    // 3. Unmarshal the bytes into the struct
+    // Note: You MUST pass a pointer (&conf) so the function can modify it
+    err = json.Unmarshal(findingContent, &findings)
+	if err != nil {
+        fmt.Printf("Error unmarshalling JSON: %v\n", err)
+        return
+    }	
+
+	mockTestResult.On("GetTestID").Return(&testID)
+	mockTestResult.On("GetTestConfiguration").Return(&testapi.TestConfiguration{})
 	mockTestResult.On("GetExecutionState").Return(testapi.TestExecutionStatesFinished)
-	mockTestResult.On("Findings", mock.Anything).Return([]testapi.FindingData{}, true, nil)
-
+	mockTestResult.On("Findings", mock.Anything).Return(findings, true, nil)
+	mockTestResult.On("GetCreatedAt").Return(&time.Time{})
+	mockTestResult.On("GetTestSubject").Return(&testapi.TestSubject{})
+	mockTestResult.On("GetTestResources").Return(&[]testapi.TestResource{})
+	mockTestResult.On("GetSubjectLocators").Return(&[]testapi.TestSubjectLocator{})
+	mockTestResult.On("GetErrors").Return(&[]testapi.IoSnykApiCommonError{})
+	
 	ctx := t.Context()
-	tc := &testshim.Client{TestClient: mockTestClient}
-	uc := &upload.Client{}
 	logger := zerolog.Nop()
+	ctx = cmdctx.WithLogger(ctx, &logger)
+	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
+	ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
+	
+	clients := &WorkflowClients{
+		TestAPIShim: mockTestClient,
+		FileUpload:  mockUploadClient,
+	}
 
-	_, err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
+	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+
 
 	assert.NoError(t, err)
 	mockTestClient.AssertExpectations(t)
@@ -210,16 +301,38 @@ func TestRunWorkflow_Success(t *testing.T) {
 
 func TestRunWorkflow_StartTestError(t *testing.T) {
 	mockTestClient := new(MockTestClient)
+	mockUploadClient := new(MockUploadClient)
+	mockProgressBar := new(MockProgressBar)
+
+	ctrl := gomock.NewController(t)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
 
 	// Setup expectations.
+	uploadResult := fileupload.UploadResult{
+		RevisionID: uuid.New(),
+	}
+
+	mockProgressBar.On("SetTitle", mock.Anything).Return()
+	mockProgressBar.On("Clear").Return(nil)
+	
+	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(nil, errors.New("start error"))
 
 	ctx := t.Context()
-	tc := &testshim.Client{TestClient: mockTestClient}
-	uc := &upload.Client{}
+	
 	logger := zerolog.Nop()
+	ctx = cmdctx.WithLogger(ctx, &logger)
+	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
+	ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
 
-	err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
+	clients := &WorkflowClients{
+		TestAPIShim: mockTestClient,
+		FileUpload:  mockUploadClient,
+	}
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "start error")
@@ -229,17 +342,36 @@ func TestRunWorkflow_StartTestError(t *testing.T) {
 func TestRunWorkflow_WaitError(t *testing.T) {
 	mockTestClient := new(MockTestClient)
 	mockTestHandle := new(MockTestHandle)
+	mockUploadClient := new(MockUploadClient)
+	mockProgressBar := new(MockProgressBar)
+
+	ctrl := gomock.NewController(t)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+	uploadResult := fileupload.UploadResult{
+		RevisionID: uuid.New(),
+	}
 
 	// Setup expectations.
+	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
+	mockProgressBar.On("SetTitle", mock.Anything).Return()
+	mockProgressBar.On("Clear").Return(nil)
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
 	mockTestHandle.On("Wait", mock.Anything).Return(errors.New("wait error"))
 
 	ctx := t.Context()
-	tc := &testshim.Client{TestClient: mockTestClient}
-	uc := &upload.Client{}
 	logger := zerolog.Nop()
+	ctx = cmdctx.WithLogger(ctx, &logger)
+	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
+	ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
 
-	err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
+	clients := &WorkflowClients{
+		TestAPIShim: mockTestClient,
+		FileUpload:  mockUploadClient,
+	}
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "wait error")
@@ -251,8 +383,24 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestClient := new(MockTestClient)
 	mockTestHandle := new(MockTestHandle)
 	mockTestResult := new(MockTestResult)
+	mockUploadClient := new(MockUploadClient)
+	mockProgressBar := new(MockProgressBar)
+
+	ctrl := gomock.NewController(t)
+
+	mockEngine := mocks.NewMockEngine(ctrl)
+	mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine);
+
+	uploadResult := fileupload.UploadResult{
+		RevisionID: uuid.New(),
+	}
+
 
 	// Setup expectations.
+	mockUploadClient.On("CreateRevisionFromChan", mock.Anything, mock.Anything, mock.Anything).Return(uploadResult, nil)
+
+	mockProgressBar.On("SetTitle", mock.Anything).Return()
+	mockProgressBar.On("Clear").Return(nil)
 	mockTestClient.On("StartTest", mock.Anything, mock.Anything).Return(mockTestHandle, nil)
 	mockTestHandle.On("Wait", mock.Anything).Return(nil)
 	mockTestHandle.On("Result").Return(mockTestResult)
@@ -262,11 +410,18 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestResult.On("GetErrors").Return(apiErrors)
 
 	ctx := t.Context()
-	tc := &testshim.Client{TestClient: mockTestClient}
-	uc := &upload.Client{}
-	logger := zerolog.Nop()
 
-	err := runWorkflow(ctx, tc, uc, "org-id", []string{"."}, &logger)
+	logger := zerolog.Nop()
+	ctx = cmdctx.WithLogger(ctx, &logger)
+	ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
+	ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
+
+	clients := &WorkflowClients{
+		TestAPIShim: mockTestClient,
+		FileUpload:  mockUploadClient,
+	}
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "test execution error")
@@ -276,3 +431,4 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestHandle.AssertExpectations(t)
 	mockTestResult.AssertExpectations(t)
 }
+
