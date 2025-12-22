@@ -155,3 +155,15 @@ issues:
         - forcetypeassert
         - wrapcheck
         - nolintlint
+    - path: test_helpers.go
+      linters:
+        - funlen
+        - gocyclo
+        - dupl
+        - goconst
+        - ireturn
+        - testpackage
+        - errcheck
+        - forcetypeassert
+        - wrapcheck
+        - nolintlint
