@@ -2,7 +2,6 @@ package upload
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/google/uuid"
 
@@ -20,16 +19,11 @@ type FileUploadClient struct {
 }
 
 func NewClient(ictx workflow.InvocationContext, orgID string) (*FileUploadClient, error) {
-	org, err := uuid.Parse(orgID)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse orgID: %s: %w", orgID, err)
-	}
-
 	config := ictx.GetConfiguration()
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()
 	baseURL := config.GetString(configuration.API_URL)
-	cfg := fileupload.Config{BaseURL: baseURL, OrgID: org}
+	cfg := fileupload.Config{BaseURL: baseURL, OrgID: uuid.MustParse(orgID)}
 
-	uploadClient := fileupload.NewClient(httpClient, cfg, fileupload.WithLogger(ictx.GetEnhancedLogger()))
+	uploadClient := fileupload.NewClient(httpClient, cfg)
 	return &FileUploadClient{uploadClient}, nil
 }

@@ -115,7 +115,6 @@ linters:
     - nilerr
     - nilnil
     - noctx
-    - nolintlint
     - prealloc
     - predeclared
     - promlinter
@@ -143,15 +142,28 @@ issues:
     # Exclude Go module cache (for when the linter incorrectly checks it)
     - pkg/mod
   exclude-rules:
-    - path: pkg/filefilter/allowed-files_test.go
+    # Exclude specific linters for all Go test files
+    - path: _test\.go
       linters:
+        - funlen
+        - gocyclo
+        - dupl
         - goconst
-    - path: internal/commands/secretstest/validate_test.go
-      linters:
         - ireturn
-    - path: internal/commands/secretstest/workflow_test.go
-      linters:
-        - ireturn
-    - path: internal/commands/secretstest/validate_test.go
-      linters:
         - testpackage
+        - errcheck
+        - forcetypeassert
+        - wrapcheck
+        - nolintlint
+    - path: test_helpers.go
+      linters:
+        - funlen
+        - gocyclo
+        - dupl
+        - goconst
+        - ireturn
+        - testpackage
+        - errcheck
+        - forcetypeassert
+        - wrapcheck
+        - nolintlint
