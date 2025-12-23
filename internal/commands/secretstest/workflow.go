@@ -109,7 +109,7 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
-	output, err := runWorkflow(ctx, clients, orgID, inputPaths, workingDir)
+	output, err := runWorkflow(ctx, clients, orgID, inputPaths, workingDir, config)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
@@ -153,6 +153,7 @@ func runWorkflow(
 	orgID string,
 	inputPaths []string,
 	workingDir string,
+	config configuration.Configuration,
 ) ([]workflow.Data, error) {
 	logger := cmdctx.Logger(ctx)
 	progressBar := cmdctx.ProgressBar(ctx)
@@ -180,8 +181,8 @@ func runWorkflow(
 
 	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
 
-	repoURL := "https://github.com/snyk/ancatest" // TODO git repo url
-	rootFolderID := "."                           // TODO root folder id
+	repoURL := config.GetString(FlagRemoteRepoURL)
+	rootFolderID := "." // TODO root folder id
 
 	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoURL, rootFolderID)
 	if err != nil {
@@ -199,6 +200,15 @@ func runWorkflow(
 
 	// result and findings for later use
 	testResult, err := executeTest(ctx, clients.TestAPIShim, param, logger)
+
+	if testResult != nil {
+		testResult.SetMetadata("target-directory", workingDir)
+	}
+
+	if repoURL == "" {
+		logger.Debug().Msg("remote repo URL is not set")
+	}
+
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
 	progressBar.Clear()
 

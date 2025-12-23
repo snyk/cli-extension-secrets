@@ -76,6 +76,7 @@ func TestRunWorkflow_Success(t *testing.T) {
 	mockTestResult.On("GetRawSummary").Return(nil)
 	mockTestResult.On("GetTestFacts").Return(nil)
 	mockTestResult.On("GetMetadata").Return(make(map[string]interface{}))
+	mockTestResult.On("SetMetadata", "target-directory", ".").Return()
 
 	ctx := t.Context()
 	logger := zerolog.Nop()
@@ -88,7 +89,9 @@ func TestRunWorkflow_Success(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	config := mockInvocationCtx.GetConfiguration()
+
+	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, ".", config)
 
 	assert.NoError(t, err)
 	mockTestClient.AssertExpectations(t)
@@ -129,7 +132,9 @@ func TestRunWorkflow_StartTestError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	config := mockInvocationCtx.GetConfiguration()
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".", config)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "start error")
@@ -168,7 +173,9 @@ func TestRunWorkflow_WaitError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	config := mockInvocationCtx.GetConfiguration()
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".", config)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "wait error")
@@ -217,7 +224,9 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	config := mockInvocationCtx.GetConfiguration()
+
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".", config)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "test execution error")

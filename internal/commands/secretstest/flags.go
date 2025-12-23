@@ -17,9 +17,9 @@ const (
 	FlagProjectEnvironment         = "project-environment"
 	FlagProjectLifecycle           = "project-lifecycle"
 	FlagProjectTags                = "project-tags"
+	FlagRemoteRepoURL              = "remote-repo-url"
 )
 
-// TODO: ensure we have all required flags (use @ioana's doc).
 func GetSecretsTestFlagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("snyk-cli-extension-secrets-test", pflag.ExitOnError)
 
@@ -39,6 +39,7 @@ func GetSecretsTestFlagSet() *pflag.FlagSet {
 	flagSet.String(FlagProjectEnvironment, "", "Set the project environment project attribute to one or more values (comma-separated).")
 	flagSet.String(FlagProjectLifecycle, "", "Set the project lifecycle project attribute to one or more values (comma-separated).")
 	flagSet.String(FlagProjectTags, "", "Set the project tags to one or more values (comma-separated key value pairs with an \"=\" separator).")
+	flagSet.String(FlagRemoteRepoURL, "", "Set or override the remote URL for the repository.")
 
 	return flagSet
 }

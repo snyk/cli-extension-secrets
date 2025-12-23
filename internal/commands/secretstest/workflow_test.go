@@ -72,6 +72,7 @@ func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
 				mockResult.EXPECT().GetRawSummary().Return(nil).AnyTimes()
 				mockResult.EXPECT().GetTestFacts().Return(nil).AnyTimes()
 				mockResult.EXPECT().GetMetadata().Return(nil).AnyTimes()
+				mockResult.EXPECT().SetMetadata(gomock.Any(), gomock.Any()).Return().AnyTimes()
 			},
 			wantErr: nil,
 		},
