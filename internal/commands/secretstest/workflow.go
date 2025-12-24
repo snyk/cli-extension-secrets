@@ -2,6 +2,7 @@ package secretstest
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -193,24 +194,20 @@ func runWorkflow(
 	}
 
 	rootFolderID, repoURL, err := findCommonRoot(absolutePaths)
-	//fmt.Printf("COMMON ROOT: rootFolderID: %s, repoURL: %s\n", rootFolderID, repoURL)
 
-	//repoURL = "https://github.com/snyk/ancatest"
-	logger.Debug().Str("repoURL", repoURL)
+	logger.Debug().Str("repoURL ", repoURL)
 	logger.Debug().Str("rootFolderID", rootFolderID)
-
-	// TODO only do this if rootFolderID is not ""
+	logger.Debug().Str("workingDir", workingDir)
 
 	relRootFolderId, err := filepath.Rel(workingDir, rootFolderID)
 
 	if err != nil {
-		// return nil, fmt.Errorf("Error getting relative path: %w", err)
-		// Log error
+		// LOG error
 		relRootFolderId = ""
 
 	}
 	logger.Debug().Str("relRootFolderId", relRootFolderId)
-	// fmt.Printf("COMMON ROOT: relRootFolderId: %s\n", relRootFolderId)
+
 	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoURL, relRootFolderId)
 	if err != nil {
 		return nil, err
@@ -278,6 +275,7 @@ func executeTest(ctx context.Context,
 
 	// Get findings for the test
 	findingsData, complete, err := finalResult.Findings(ctx)
+
 	if err != nil {
 		logger.Error().Err(err).Msg("Error fetching findings")
 		if !complete && len(findingsData) > 0 {
@@ -291,6 +289,12 @@ func executeTest(ctx context.Context,
 			logger.Warn().Int(LogFieldCount, len(findingsData)).Msg("Partial findings retrieved; findings retrieval incomplete")
 		}
 		return finalResult, fmt.Errorf("test execution error: test completed but findings could not be retrieved")
+	}
+
+	// debug log
+	data, err := json.Marshal(findingsData)
+	if err == nil {
+		logger.Debug().Str("findingsData", string(data)).Msg("Retrieved findings")
 	}
 
 	return finalResult, nil
@@ -346,8 +350,8 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 	return testResource, nil
 }
 
-func findCommonRoot(absInputPaths []string) (string, string, error) {
-	rootFolderID, err := getRootFolderID(absInputPaths)
+func findCommonRoot(inputPaths []string) (string, string, error) {
+	rootFolderID, err := getRootFolderID(inputPaths)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to determine common root: %w", err)
 	}
@@ -364,6 +368,19 @@ func findCommonRoot(absInputPaths []string) (string, string, error) {
 	return rootFolderID, repoURL, nil
 }
 
+func GetDir(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+
+	if info.IsDir() {
+		return path, nil
+	}
+
+	return filepath.Dir(path), nil
+}
+
 func getRootFolderID(inputPaths []string) (string, error) {
 	if len(inputPaths) == 0 {
 		return "", fmt.Errorf("no paths provided")
@@ -376,7 +393,12 @@ func getRootFolderID(inputPaths []string) (string, error) {
 	for _, path := range inputPaths {
 		var gitRoot string
 
-		parentDir := filepath.Dir(path)
+		parentDir, err := GetDir(path)
+
+		if err != nil {
+			return "", fmt.Errorf("can't stat %s: %w", path, err)
+		}
+
 		resolved, ok := seenDirs[parentDir]
 
 		if ok {
