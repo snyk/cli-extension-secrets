@@ -2,8 +2,10 @@ package secretstest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -14,6 +16,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/ui"
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -171,19 +174,44 @@ func runWorkflow(
 			ff.TextFileOnlyFilter(logger),
 		),
 	)
-	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
+
+	absolutePaths := make([]string, len(inputPaths))
+	for i, p := range inputPaths {
+		absPath, err := filepath.Abs(p)
+		if err != nil {
+			// TODO maybe just skip the path?
+			return nil, fmt.Errorf("Error getting relative path: %w", err)
+		}
+		absolutePaths[i] = filepath.Clean(absPath)
+	}
+
+	pathsChan := textFilesFilter.Filter(uploadCtx, absolutePaths, logger)
 
 	uploadRevision, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
 	if err != nil {
 		return nil, fmt.Errorf("error creating revision: %w", err)
 	}
 
-	logger.Debug().Str("revisionID", uploadRevision.RevisionID.String()).Msg("Upload result")
+	rootFolderID, repoURL, err := findCommonRoot(absolutePaths)
+	//fmt.Printf("COMMON ROOT: rootFolderID: %s, repoURL: %s\n", rootFolderID, repoURL)
 
-	repoURL := "https://github.com/snyk/ancatest" // TODO git repo url
-	rootFolderID := "."                           // TODO root folder id
+	//repoURL = "https://github.com/snyk/ancatest"
+	logger.Debug().Str("repoURL", repoURL)
+	logger.Debug().Str("rootFolderID", rootFolderID)
 
-	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoURL, rootFolderID)
+	// TODO only do this if rootFolderID is not ""
+
+	relRootFolderId, err := filepath.Rel(workingDir, rootFolderID)
+
+	if err != nil {
+		// return nil, fmt.Errorf("Error getting relative path: %w", err)
+		// Log error
+		relRootFolderId = ""
+
+	}
+	logger.Debug().Str("relRootFolderId", relRootFolderId)
+	// fmt.Printf("COMMON ROOT: relRootFolderId: %s\n", relRootFolderId)
+	testResource, err := createTestResource(uploadRevision.RevisionID.String(), repoURL, relRootFolderId)
 	if err != nil {
 		return nil, err
 	}
@@ -316,4 +344,92 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 	}
 
 	return testResource, nil
+}
+
+func findCommonRoot(absInputPaths []string) (string, string, error) {
+	rootFolderID, err := getRootFolderID(absInputPaths)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to determine common root: %w", err)
+	}
+
+	repoURL, err := git.RepoUrlFromDir(rootFolderID)
+	if err != nil {
+		return "", "", fmt.Errorf("could not get repository URL for %s: %w", rootFolderID, err)
+	}
+
+	if repoURL == "" {
+		return "", "", fmt.Errorf("repository at %s has no remote URL configured", rootFolderID)
+	}
+
+	return rootFolderID, repoURL, nil
+}
+
+func getRootFolderID(inputPaths []string) (string, error) {
+	if len(inputPaths) == 0 {
+		return "", fmt.Errorf("no paths provided")
+	}
+
+	var rootFolderID string
+
+	seenDirs := make(map[string]string)
+
+	for _, path := range inputPaths {
+		var gitRoot string
+
+		parentDir := filepath.Dir(path)
+		resolved, ok := seenDirs[parentDir]
+
+		if ok {
+			gitRoot = resolved
+		} else {
+			gd, err := walkUpDirToGit(parentDir)
+			if err != nil {
+				return "", fmt.Errorf("could not find git root for %s: %w", path, err)
+			}
+			gitRoot = gd
+			seenDirs[parentDir] = gd
+		}
+
+		// if rootDir is set, but we find a new git root, return error
+		if rootFolderID != "" && rootFolderID != gitRoot {
+			return "", fmt.Errorf("ambiguous root: paths belong to multiple repositories (%s and %s)", rootFolderID, gitRoot)
+		}
+		if rootFolderID == "" {
+			rootFolderID = gitRoot
+		}
+	}
+
+	return rootFolderID, nil
+}
+
+// that contains a .git folder and returns the parent of the .git folder.
+func walkUpDirToGit(startPath string) (string, error) {
+	absPath, err := filepath.Abs(startPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	current := absPath
+
+	for {
+		target := filepath.Join(current, ".git")
+
+		info, err := os.Stat(target)
+
+		if err == nil {
+			if info.IsDir() {
+				return current, nil
+			}
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("error accessing %s: %w", target, err)
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+
+	return "", fmt.Errorf("reached root without finding target")
 }
