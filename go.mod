@@ -6,7 +6,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
-	github.com/snyk/error-catalog-golang-public v0.0.0-20251205100923-e93b06d4a6c6
+	github.com/snyk/error-catalog-golang-public v0.0.0-20260108110943-21ad0c940c14
 	github.com/snyk/go-application-framework v0.0.0-20251218080318-c938eac5f436
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
