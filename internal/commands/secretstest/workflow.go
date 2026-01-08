@@ -27,7 +27,8 @@ const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
 	FilterAndUploadFilesTimeout = 5 * time.Second
 	// LogFieldCount is the logger key for number of findings.
-	LogFieldCount = "count"
+	LogFieldCount           = "count"
+	UnableToInitializeError = "Unable to initialize."
 )
 
 var (
@@ -98,7 +99,8 @@ func SecretsWorkflow(
 	if workingDir == "" {
 		getwd, gerr := os.Getwd()
 		if gerr != nil {
-			return nil, fmt.Errorf("could not get current working directory: %w", gerr)
+			logger.Error().Err(gerr).Msg("could not get current working directory: %w")
+			return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
 		}
 		workingDir = getwd
 	}
@@ -112,7 +114,7 @@ func SecretsWorkflow(
 	output, err := runWorkflow(ctx, clients, orgID, inputPaths, workingDir)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
-		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
+		return nil, cli_errors.NewGeneralSecretsFailureError("Workflow execution failed.")
 	}
 
 	//nolint:errcheck // We don't need to fail the command due to UI errors.
@@ -123,7 +125,7 @@ func SecretsWorkflow(
 
 func checkSecretsEnabled(config configuration.Configuration) error {
 	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag.")
+		return cli_errors.NewFeatureNotEnabledError("User not allowed to run without feature flag.")
 	}
 
 	return nil
@@ -133,12 +135,12 @@ func setupClients(ictx workflow.InvocationContext, orgID string, logger *zerolog
 	uploadClient, err := upload.NewClient(ictx, orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create upload client")
-		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
+		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
 	}
 	testShimClient, err := testshim.NewClient(ictx)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create test shim client")
-		return nil, cli_errors.NewGeneralCLIFailureError("Unable to initialize.")
+		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
 	}
 
 	return &WorkflowClients{
