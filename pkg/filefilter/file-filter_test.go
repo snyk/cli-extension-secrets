@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 )
 
 // mockFilter implements FileFilter for testing purposes.
@@ -78,7 +79,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithFilters(exeFilter),
 		)
 
-		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+		outChan := pipeline.Filter(t.Context(), inputPaths, []string{}, &logger)
 		results := chanToSlice(outChan)
 
 		// Sort results because concurrent workers do not guarantee order
@@ -103,7 +104,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithFilters(exeFilter, vendorFilter),
 		)
 
-		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+		outChan := pipeline.Filter(t.Context(), inputPaths, []string{}, &logger)
 		results := chanToSlice(outChan)
 
 		sortStrings(results)
@@ -126,7 +127,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithFilters(exeFilter),
 		)
 
-		outChan := pipeline.Filter(t.Context(), []string{}, &logger)
+		outChan := pipeline.Filter(t.Context(), []string{}, []string{}, &logger)
 		results := chanToSlice(outChan)
 
 		if len(results) != 0 {
@@ -214,7 +215,7 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 		WithFilters(passAllFilter),
 	)
 
-	outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+	outChan := pipeline.Filter(t.Context(), inputPaths, []string{}, &logger)
 
 	// Collect results.
 	results := chanToSlice(outChan)
@@ -223,6 +224,40 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 	if len(results) != count {
 		t.Errorf("Stress test failed: Should return all files. Got %d, want %d", len(results), count)
 	}
+}
+
+func TestFilter_UserAndExtensionMerge(t *testing.T) {
+	logger := newTestLogger()
+	inputFiles := map[string]string{
+		"src/app.go":         "package main",   // KEEP
+		"node_modules/d3.js": "minified code",  // DROP (Extension: node_modules/)
+		"image.png":          "binary data",    // DROP (Extension: *.png)
+		"dist/bundle.js":     "built code",     // DROP (User: dist/**)
+		"secret.txt":         "sensitive info", // DROP (User: secret.txt)
+	}
+	dirPath := setupTempDir(t, inputFiles)
+	inputPaths := []string{dirPath}
+
+	t.Run("Verify user provided excludes", func(t *testing.T) {
+		pipeline := NewPipeline(WithConcurrency(1))
+		// These mimic the output of your buildExclusionGlobs function
+		userExcludes := []string{
+			"**/dist", "**/dist/**",
+			"**/secret.txt", "**/secret.txt/**",
+		}
+		outChan := pipeline.Filter(t.Context(), inputPaths, userExcludes, &logger)
+		results := chanToSlice(outChan)
+
+		// We expect only one file: src/app.go
+		assert.Equal(t, 1, len(results), "Only src/app.go should remain")
+		for _, res := range results {
+			assert.False(t, strings.Contains(res, "node_modules"), "Extension ignore failed")
+			assert.False(t, strings.Contains(res, "image.png"), "Extension extension ignore failed")
+			assert.False(t, strings.Contains(res, "dist"), "User directory ignore failed")
+			assert.False(t, strings.Contains(res, "secret.txt"), "User file ignore failed")
+			assert.True(t, strings.HasSuffix(filepath.ToSlash(res), "src/app.go"))
+		}
+	})
 }
 
 func newTestLogger() zerolog.Logger {

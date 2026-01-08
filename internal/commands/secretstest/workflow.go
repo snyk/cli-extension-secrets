@@ -2,6 +2,7 @@ package secretstest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -31,8 +32,9 @@ const (
 )
 
 var (
-	WorkflowID     = workflow.NewWorkflowIdentifier("secrets.test")
-	setupClientsFn = setupClients // internal for testing
+	WorkflowID        = workflow.NewWorkflowIdentifier("secrets.test")
+	setupClientsFn    = setupClients // internal for testing
+	ErrPathNotAllowed = errors.New("the --exclude argument must be a comma separated list of directory or file names and cannot contain a path")
 )
 
 func RegisterWorkflows(e workflow.Engine) error {
@@ -93,6 +95,11 @@ func SecretsWorkflow(
 
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
 	logger.Info().Strs("inputPaths", inputPaths).Msg("the input paths")
+	excludePaths, err := buildExclusionGlobs(config.GetString(FlagExcludeFilePath))
+	if err != nil {
+		return nil, cli_errors.NewCommandArgsError(err.Error())
+	}
+	logger.Info().Strs("excludePaths", excludePaths).Msg("the exclude paths")
 
 	workingDir := config.GetString(configuration.WORKING_DIRECTORY)
 	if workingDir == "" {
@@ -108,8 +115,7 @@ func SecretsWorkflow(
 	if err != nil {
 		return nil, err
 	}
-
-	output, err := runWorkflow(ctx, clients, orgID, inputPaths, workingDir)
+	output, err := runWorkflow(ctx, clients, orgID, inputPaths, excludePaths, workingDir)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralCLIFailureError("Workflow execution failed.")
@@ -152,6 +158,7 @@ func runWorkflow(
 	clients *WorkflowClients,
 	orgID string,
 	inputPaths []string,
+	excludePaths []string,
 	workingDir string,
 ) ([]workflow.Data, error) {
 	logger := cmdctx.Logger(ctx)
@@ -171,7 +178,7 @@ func runWorkflow(
 			ff.TextFileOnlyFilter(logger),
 		),
 	)
-	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, logger)
+	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths, excludePaths, logger)
 
 	uploadRevision, err := clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, workingDir)
 	if err != nil {
@@ -316,4 +323,38 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 	}
 
 	return testResource, nil
+}
+
+// BuildExclusionGlobs converts a comma-separated string into global glob patterns.
+// It enforces basename matching (matching the name anywhere in the tree)
+// rather than path-based matching, ensuring consistency with snyk test.
+func buildExclusionGlobs(rawExcludeFlag string) ([]string, error) {
+	if rawExcludeFlag == "" {
+		return []string{}, nil
+	}
+
+	rawEntries := strings.Split(rawExcludeFlag, ",")
+	// Pre-allocate space for the double-glob patterns
+	patterns := make([]string, 0, len(rawEntries)*2)
+
+	for _, entry := range rawEntries {
+		trimmed := strings.TrimSpace(entry)
+		if trimmed == "" {
+			continue
+		}
+
+		// Strictly forbid paths. This ensures we are doing basename matching.
+		if strings.ContainsAny(trimmed, "/\\") {
+			return nil, ErrPathNotAllowed
+		}
+
+		// Create global patterns to match the basename at any depth.
+		// Using **/ ensures 'dir1' matches './dir1' and './src/dir1'.
+		patterns = append(patterns,
+			"**/"+trimmed,
+			"**/"+trimmed+"/**",
+		)
+	}
+
+	return patterns, nil
 }

@@ -88,7 +88,7 @@ func TestRunWorkflow_Success(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	_, err = runWorkflow(ctx, clients, "org-id", []string{"."}, []string{}, ".")
 
 	assert.NoError(t, err)
 	mockTestClient.AssertExpectations(t)
@@ -129,7 +129,7 @@ func TestRunWorkflow_StartTestError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, []string{}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "start error")
@@ -168,7 +168,7 @@ func TestRunWorkflow_WaitError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, []string{}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "wait error")
@@ -217,7 +217,7 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 		FileUpload:  mockUploadClient,
 	}
 
-	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, ".")
+	_, err := runWorkflow(ctx, clients, "org-id", []string{"."}, []string{}, ".")
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "test execution error")
@@ -226,4 +226,81 @@ func TestRunWorkflow_ExecutionError(t *testing.T) {
 	mockTestClient.AssertExpectations(t)
 	mockTestHandle.AssertExpectations(t)
 	mockTestResult.AssertExpectations(t)
+}
+
+func Test_buildExclusionGlobs(t *testing.T) {
+	tests := []struct {
+		name          string
+		input         string
+		expected      []string
+		expectedError error
+	}{
+		{
+			name:          "Empty input returns empty slice",
+			input:         "",
+			expected:      []string{},
+			expectedError: nil,
+		},
+		{
+			name:  "Standard directory and file",
+			input: "node_modules,config.json",
+			expected: []string{
+				"**/node_modules", "**/node_modules/**",
+				"**/config.json", "**/config.json/**",
+			},
+			expectedError: nil,
+		},
+		{
+			name:          "Noisy whitespace and empty entries",
+			input:         "  item1 , , item2  ",
+			expected:      []string{"**/item1", "**/item1/**", "**/item2", "**/item2/**"},
+			expectedError: nil,
+		},
+		// Error Cases
+		{
+			name:          "POSIX paths return error",
+			input:         "dir/subdir",
+			expected:      nil,
+			expectedError: ErrPathNotAllowed,
+		},
+		{
+			name:          "Windows backslashes return error",
+			input:         "target\\debug",
+			expected:      nil,
+			expectedError: ErrPathNotAllowed,
+		},
+		{
+			name:          "Leading noise/relative paths return error",
+			input:         "./dist/",
+			expected:      nil,
+			expectedError: ErrPathNotAllowed,
+		},
+		{
+			name:          "Path traversal returns error",
+			input:         "../../etc/passwd",
+			expected:      nil,
+			expectedError: ErrPathNotAllowed,
+		},
+		{
+			name:          "Hidden files work if no path is present",
+			input:         ".env",
+			expected:      []string{"**/.env", "**/.env/**"},
+			expectedError: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := buildExclusionGlobs(tt.input)
+
+			// Check error
+			if tt.expectedError != nil {
+				assert.ErrorIs(t, err, tt.expectedError, "Scenario: %s", tt.name)
+				assert.Nil(t, got)
+			} else {
+				assert.NoError(t, err, "Scenario: %s", tt.name)
+				assert.Equal(t, tt.expected, got, "Scenario: %s", tt.name)
+			}
+		})
+	}
 }

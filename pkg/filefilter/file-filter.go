@@ -56,8 +56,14 @@ func WithFilters(filters ...FileFilter) Option {
 
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
-func (p *Pipeline) Filter(ctx context.Context, inputPaths []string, logger *zerolog.Logger) chan string {
-	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, getCustomGlobIgnoreRules(), logger)
+func (p *Pipeline) Filter(ctx context.Context, inputPaths, userExcludePatterns []string, logger *zerolog.Logger) chan string {
+	// Merge user excludes with package custom globs:
+	extensionExcludes := getCustomGlobIgnoreRules()
+	customExcludes := make([]string, 0, len(extensionExcludes)+len(userExcludePatterns))
+	customExcludes = append(customExcludes, extensionExcludes...)
+	customExcludes = append(customExcludes, userExcludePatterns...)
+
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, customExcludes, logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)
