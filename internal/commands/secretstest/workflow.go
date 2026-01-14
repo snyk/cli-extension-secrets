@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
+
 	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -63,7 +65,7 @@ func SecretsWorkflow(
 
 	err := validateFlagsConfig(config)
 	if err != nil {
-		return nil, cli_errors.NewValidationFailureError(err.Error())
+		return nil, cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
 	}
 
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
@@ -72,7 +74,7 @@ func SecretsWorkflow(
 		absPath, absErr := filepath.Abs(p)
 		if absErr != nil {
 			logger.Error().Err(absErr).Msg("could not get absolute path for: " + p)
-			return nil, cli_errors.NewGeneralCLIFailureError("Unable to get absolute path")
+			return nil, cli_errors.NewGeneralSecretsFailureError("Unable to get absolute path")
 		}
 		absInputPaths[i] = filepath.Clean(absPath)
 	}
