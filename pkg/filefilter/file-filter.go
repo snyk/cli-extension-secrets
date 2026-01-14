@@ -17,6 +17,7 @@ type FileFilter interface {
 
 // Pipeline holds the configuration for the filtering process.
 type Pipeline struct {
+	logger      *zerolog.Logger
 	concurrency int
 	filters     []FileFilter
 }
@@ -47,6 +48,13 @@ func WithConcurrency(n int) Option {
 	}
 }
 
+// WithConcurrency allows overriding the default worker count.
+func WithLogger(logger *zerolog.Logger) Option {
+	return func(p *Pipeline) {
+		p.logger = logger
+	}
+}
+
 // WithFilters allows passing multiple filters (FileSizeFilter, TextFileOnlyFilter).
 func WithFilters(filters ...FileFilter) Option {
 	return func(p *Pipeline) {
@@ -56,8 +64,8 @@ func WithFilters(filters ...FileFilter) Option {
 
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
-func (p *Pipeline) Filter(ctx context.Context, inputPaths []string, logger *zerolog.Logger) chan string {
-	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, getCustomGlobIgnoreRules(), logger)
+func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, getCustomGlobIgnoreRules(), p.logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)

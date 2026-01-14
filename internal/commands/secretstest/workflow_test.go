@@ -4,123 +4,91 @@ package secretstest
 import (
 	"testing"
 
-	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
-	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
-
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	testShimMocks "github.com/snyk/cli-extension-secrets/internal/clients/testshim/mocks"
-	uploadMocks "github.com/snyk/cli-extension-secrets/internal/clients/upload/mocks"
-	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 )
 
-func TestSecretsWorkflow_FlagCombinations(t *testing.T) {
-	tests := []struct {
-		name    string
-		setup   func(t *testing.T, ctrl *gomock.Controller, config configuration.Configuration, mockClients *WorkflowClients)
-		wantErr error
-	}{
-		{
-			name: "feature flag disabled, returns error",
-			setup: func(t *testing.T, _ *gomock.Controller, config configuration.Configuration, _ *WorkflowClients) {
-				t.Helper()
-				config.Set(FeatureFlagIsSecretsEnabled, false)
-			},
-			wantErr: cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag."),
-		},
-		{
-			name: "feature flag enabled, does not return error",
-			setup: func(t *testing.T, ctrl *gomock.Controller, config configuration.Configuration, mockClients *WorkflowClients) {
-				t.Helper()
-				config.Set(FeatureFlagIsSecretsEnabled, true)
-				tempDir := t.TempDir()
-				config.Set(configuration.INPUT_DIRECTORY, tempDir)
+func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-				mockUploadClient, ok := mockClients.FileUpload.(*uploadMocks.MockClient)
-				require.True(t, ok, "mock upload client is not of the expected type")
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, false)
+	mockIctx := setupMockIctx(ctrl, mockConfig)
 
-				mockUploadClient.EXPECT().
-					CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(fileupload.UploadResult{}, nil)
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	assert.Error(t, err)
+	//nolint:errorlint // we want to check the snyk_error detail.
+	assert.Contains(t, err.(snyk_errors.Error).Detail, "User not allowed to run without feature flag.")
+}
 
-				handler := testShimMocks.NewMockTestHandle(ctrl)
-				mockClients.TestAPIShim.(*testShimMocks.MockClient).EXPECT().StartTest(gomock.Any(), gomock.Any()).Return(handler, nil)
-				handler.EXPECT().Wait(gomock.Any()).Return(nil)
+func TestSecretsWorkflow_UnsupportedFlag(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-				mockResult := testShimMocks.NewMockTestResult(ctrl)
-				handler.EXPECT().Result().Return(mockResult).AnyTimes()
-				mockResult.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
-				mockResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil).AnyTimes()
-				mockResult.EXPECT().GetTestID().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetTestConfiguration().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetCreatedAt().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetTestSubject().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetSubjectLocators().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetErrors().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetWarnings().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetPassFail().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetOutcomeReason().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetRawSummary().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetTestFacts().Return(nil).AnyTimes()
-				mockResult.EXPECT().GetMetadata().Return(nil).AnyTimes()
-			},
-			wantErr: nil,
-		},
-	}
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(FlagReport, true)
+	mockIctx := setupMockIctx(ctrl, mockConfig)
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			mockProgressBar := new(MockProgressBar)
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	assert.Error(t, err)
+	//nolint:errorlint // we want to check the snyk_error detail.
+	assert.Contains(t, err.(snyk_errors.Error).Detail, "Flag --report is not yet supported.")
+}
 
-			mockEngine := mocks.NewMockEngine(ctrl)
-			mockInvocationCtx := createMockInvocationCtx(t, ctrl, mockEngine)
+func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-			ctx := t.Context()
-			logger := zerolog.Nop()
-			ctx = cmdctx.WithLogger(ctx, &logger)
-			ctx = cmdctx.WithProgressBar(ctx, mockProgressBar)
-			ctx = cmdctx.WithIctx(ctx, mockInvocationCtx)
-			mockInvocationCtx.EXPECT().Context().Return(ctx).AnyTimes()
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, "")
+	mockIctx := setupMockIctx(ctrl, mockConfig)
 
-			mockClients := &WorkflowClients{
-				FileUpload:  uploadMocks.NewMockClient(ctrl),
-				TestAPIShim: testShimMocks.NewMockClient(ctrl),
-			}
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	assert.Error(t, err)
+	//nolint:errorlint // we want to check the snyk_error detail.
+	assert.Contains(t, err.(snyk_errors.Error).Detail, "No org provided.")
+}
 
-			// Replace the real client setup function with one that returns our mocks.
-			originalSetupClientsFn := setupClientsFn
-			setupClientsFn = func(_ workflow.InvocationContext, _ string, _ *zerolog.Logger) (*WorkflowClients, error) {
-				return mockClients, nil
-			}
-			t.Cleanup(func() {
-				setupClientsFn = originalSetupClientsFn
-			})
+func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-			// Setup test case
-			test.setup(t, ctrl, mockInvocationCtx.GetConfiguration(), mockClients)
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(FlagSeverityThreshold, "invalid-value")
+	mockIctx := setupMockIctx(ctrl, mockConfig)
 
-			// Execute
-			_, err := SecretsWorkflow(mockInvocationCtx, []workflow.Data{})
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	assert.Error(t, err)
+	//nolint:errorlint // we want to check the snyk_error detail.
+	assert.Contains(t, err.(snyk_errors.Error).Detail, "Invalid flag option")
+}
 
-			// Verify
-			if test.wantErr != nil {
-				require.Error(t, err)
-				assert.ErrorAs(t, err, &test.wantErr)
-				assert.Equal(t, test.wantErr.Error(), err.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
+	logger := zerolog.Nop()
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	mockUserInterface := mocks.NewMockUserInterface(ctrl)
+	mockProgressBar := mocks.NewMockProgressBar(ctrl)
+
+	mockIctx.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
+
+	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
+	mockProgressBar.EXPECT().SetTitle("Validating configuration...")
+	mockProgressBar.EXPECT().UpdateProgress(ui.InfiniteProgress)
+	mockProgressBar.EXPECT().Clear()
+
+	return mockIctx
 }

@@ -26,8 +26,6 @@ func NewClient(ictx workflow.InvocationContext) (*TestAPIClient, error) {
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()
 	snykClient := snykclient.NewSnykClient(httpClient, config.GetString(configuration.API_URL), config.GetString(configuration.ORGANIZATION))
 
-	// TODO: check again the http client configuration, see the config used in other places:
-	// https://snyksec.atlassian.net/wiki/spaces/RD/pages/3242262614/Test+API+for+Risk+Score
 	testShimClient, err := testapi.NewTestClient(
 		snykClient.GetAPIBaseURL(),
 		testapi.WithPollInterval(2*time.Second),
