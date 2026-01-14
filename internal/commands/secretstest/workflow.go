@@ -49,7 +49,7 @@ func SecretsWorkflow(
 	defer u.Clear()
 
 	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return nil, cli_errors.NewFeatureUnderDevelopmentError("User not allowed to run without feature flag.")
+		return nil, cli_errors.NewFeatureNotEnabledError("User not allowed to run without feature flag.")
 	}
 
 	if config.IsSet(FlagReport) {
