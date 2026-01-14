@@ -3,7 +3,6 @@ package secretstest
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -27,6 +26,8 @@ const (
 type Command struct {
 	Logger        *zerolog.Logger
 	OrgID         string
+	RootFolderID  string
+	RepoURL       string
 	Clients       *WorkflowClients
 	Excludes      []string
 	ErrorFactory  *ErrorFactory
@@ -57,7 +58,7 @@ func NewWorkflowClients(ictx workflow.InvocationContext, orgID string) (*Workflo
 	}, nil
 }
 
-func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID string, getClients newClientsFunc) (*Command, error) {
+func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID, rootFolderID, repoURL string, getClients newClientsFunc) (*Command, error) {
 	logger := ictx.GetEnhancedLogger()
 
 	clients, err := getClients(ictx, orgID)
@@ -69,6 +70,8 @@ func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID stri
 		Logger:        logger,
 		Clients:       clients,
 		OrgID:         orgID,
+		RepoURL:       repoURL,
+		RootFolderID:  rootFolderID,
 		ErrorFactory:  NewErrorFactory(logger),
 		UserInterface: u,
 	}, nil
@@ -86,19 +89,8 @@ func (c *Command) RunWorkflow(
 		return nil, err
 	}
 
-	rootFolderID, repoURL, err := findCommonRoot(inputPaths)
-	if err != nil {
-		return nil, err
-	}
-
-	relRootFolderID, err := filepath.Rel(workingDir, rootFolderID)
-	if err != nil {
-		c.Logger.Info().Msgf("could not determine relative root folder ID for: %s", rootFolderID)
-		relRootFolderID = ""
-	}
-
 	c.UserInterface.SetTitle(TitleScanning)
-	testResult, err := c.triggerScan(ctx, uploadRevision, repoURL, relRootFolderID)
+	testResult, err := c.triggerScan(ctx, uploadRevision)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +128,8 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPaths []string,
 }
 
 //nolint:ireturn // supposed to return interface.
-func (c *Command) triggerScan(ctx context.Context, uploadRevision, repoURL, rootFolderID string) (testapi.TestResult, error) {
-	testResource, err := createTestResource(uploadRevision, repoURL, rootFolderID)
+func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testapi.TestResult, error) {
+	testResource, err := createTestResource(uploadRevision, c.RepoURL, c.RootFolderID)
 	if err != nil {
 		return nil, c.ErrorFactory.CreateTestResourceError(err)
 	}

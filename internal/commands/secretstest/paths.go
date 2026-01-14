@@ -9,7 +9,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
-func findCommonRoot(inputPaths []string) (rootFolderID, repoURL string, err error) {
+func findCommonRoot(wd string, inputPaths []string) (rootFolderID, repoURL string, err error) {
 	rootFolderID, err = getRootFolderID(inputPaths)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to determine common root: %w", err)
@@ -24,7 +24,12 @@ func findCommonRoot(inputPaths []string) (rootFolderID, repoURL string, err erro
 		return "", "", fmt.Errorf("repository at %s has no remote URL configured", rootFolderID)
 	}
 
-	return rootFolderID, repoURL, nil
+	rootFolder, err := filepath.Rel(wd, rootFolderID)
+	if err != nil {
+		return "", "", fmt.Errorf("could not determine relative root folder: %w", err)
+	}
+
+	return rootFolder, repoURL, nil
 }
 
 func getDir(path string) (string, error) {

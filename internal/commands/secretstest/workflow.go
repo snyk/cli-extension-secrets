@@ -86,9 +86,13 @@ func SecretsWorkflow(
 		}
 		workingDir = getwd
 	}
-	logger.Info().Str("workingDir", workingDir).Msg("the working dir")
 
-	c, err := NewCommand(ictx, u, orgID, NewWorkflowClients)
+	rootFolder, repoURL, err := findCommonRoot(workingDir, inputPaths)
+	if err != nil {
+		logger.Warn().Str("rootFolder", rootFolder).Str("repoURL", repoURL).Msg("could not determine common repo root")
+	}
+
+	c, err := NewCommand(ictx, u, orgID, rootFolder, repoURL, NewWorkflowClients)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not initialize command")
 		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
