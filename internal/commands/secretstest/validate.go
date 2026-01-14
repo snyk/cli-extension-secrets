@@ -1,10 +1,10 @@
 package secretstest
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 )
 
@@ -102,8 +102,8 @@ func validateFlagsWithoutReportConfig(config configuration.Configuration) error 
 
 	for _, flagName := range reportFlags {
 		if config.IsSet(flagName) {
-			errMsg := fmt.Sprintf("Invalid use of --%s, it can only be used in combination with the --report option.", flagName)
-			return cli.NewInvalidFlagOptionError(errMsg)
+			errMsg := fmt.Sprintf("Invalid use of --%s, it can only be used in combination with the --report option", flagName)
+			return errors.New(errMsg)
 		}
 	}
 	return nil
@@ -123,7 +123,7 @@ func validateFlagValue(config configuration.Configuration, flag flagWithOptions)
 
 	if len(rawValues) > 1 && flag.singleChoice {
 		errMsg := fmt.Sprintf("Invalid --%s, please use one of %s. ", flag.name, strings.Join(getKeys(flag.validOptions), " | "))
-		return cli.NewInvalidFlagOptionError(errMsg)
+		return errors.New(errMsg)
 	}
 
 	var invalidValues []string
@@ -141,7 +141,7 @@ func validateFlagValue(config configuration.Configuration, flag flagWithOptions)
 		if flag.allowEmpty {
 			errMsg += fmt.Sprintf("\nTo clear all existing values, pass no values i.e. %s=", flag.name)
 		}
-		return cli.NewInvalidFlagOptionError(errMsg)
+		return errors.New(errMsg)
 	}
 
 	return nil
@@ -170,7 +170,7 @@ func validateTags(config configuration.Configuration) error {
 		if len(tagParts) != 2 {
 			errMsg := fmt.Sprintf("The tag %s does not have an \"=\" separating the key and value. For example: %s=KEY=VALUE", t, FlagProjectTags)
 			errMsg += fmt.Sprintf("\nTo clear all existing values, pass no values i.e. %s=", FlagProjectTags)
-			return cli.NewInvalidFlagOptionError(errMsg)
+			return errors.New(errMsg)
 		}
 	}
 

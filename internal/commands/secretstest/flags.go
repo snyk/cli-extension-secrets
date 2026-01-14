@@ -19,7 +19,6 @@ const (
 	FlagProjectTags                = "project-tags"
 )
 
-// TODO: ensure we have all required flags (use @ioana's doc).
 func GetSecretsTestFlagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("snyk-cli-extension-secrets-test", pflag.ExitOnError)
 

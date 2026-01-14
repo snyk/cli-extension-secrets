@@ -76,9 +76,10 @@ func TestFilter_Logic(t *testing.T) {
 		pipeline := NewPipeline(
 			WithConcurrency(2),
 			WithFilters(exeFilter),
+			WithLogger(&logger),
 		)
 
-		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+		outChan := pipeline.Filter(t.Context(), inputPaths)
 		results := chanToSlice(outChan)
 
 		// Sort results because concurrent workers do not guarantee order
@@ -101,9 +102,10 @@ func TestFilter_Logic(t *testing.T) {
 		pipeline := NewPipeline(
 			WithConcurrency(4),
 			WithFilters(exeFilter, vendorFilter),
+			WithLogger(&logger),
 		)
 
-		outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+		outChan := pipeline.Filter(t.Context(), inputPaths)
 		results := chanToSlice(outChan)
 
 		sortStrings(results)
@@ -124,9 +126,10 @@ func TestFilter_Logic(t *testing.T) {
 		pipeline := NewPipeline(
 			WithConcurrency(1),
 			WithFilters(exeFilter),
+			WithLogger(&logger),
 		)
 
-		outChan := pipeline.Filter(t.Context(), []string{}, &logger)
+		outChan := pipeline.Filter(t.Context(), []string{})
 		results := chanToSlice(outChan)
 
 		if len(results) != 0 {
@@ -212,9 +215,10 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 	pipeline := NewPipeline(
 		WithConcurrency(10),
 		WithFilters(passAllFilter),
+		WithLogger(&logger),
 	)
 
-	outChan := pipeline.Filter(t.Context(), inputPaths, &logger)
+	outChan := pipeline.Filter(t.Context(), inputPaths)
 
 	// Collect results.
 	results := chanToSlice(outChan)

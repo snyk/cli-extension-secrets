@@ -3,7 +3,6 @@ package snykclient
 
 import (
 	"net/http"
-	"time"
 )
 
 // Client is used for interacting with the Snyk API.
@@ -12,9 +11,6 @@ type Client struct {
 	apiBaseURL string
 	orgID      string
 }
-
-// backoffFn defines the signature for backoff functions.
-type backoffFn func()
 
 // GetClient returns the HTTP client.
 func (s *Client) GetClient() *http.Client {
@@ -30,12 +26,6 @@ func (s *Client) GetAPIBaseURL() string {
 // GetOrgID returns the organization ID.
 func (s *Client) GetOrgID() string {
 	return s.orgID
-}
-
-// DefaultBackoff is the default backoff function.
-var DefaultBackoff backoffFn = func() {
-	// TODO: fine tune backoff
-	time.Sleep(time.Millisecond * 500)
 }
 
 // NewSnykClient creates a new SnykClient instance.
