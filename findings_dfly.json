@@ -1,0 +1,179 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "cause_of_failure": false,
+        "description": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+        "evidence": [],
+        "finding_type": "secret",
+        "key": "9a8b8877-83c8-53a2-a703-9e9cb7f97efe",
+        "locations": [
+          {
+            "file_path": "data/static/users.yml",
+            "from_column": 4,
+            "from_line": 150,
+            "to_column": 47,
+            "to_line": 150,
+            "type": "source"
+          }
+        ],
+        "policy_modifications": [
+          {
+            "pointer": "/attributes/rating/severity",
+            "reason": ""
+          }
+        ],
+        "problems": [
+          {
+            "categories": [
+              "Security"
+            ],
+            "help": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+            "id": "generic-api-key",
+            "name": "Generic API Key",
+            "precision": "very-high",
+            "severity": "high",
+            "short_description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+            "source": "secret",
+            "tags": []
+          },
+          {
+            "id": "CWE-798",
+            "source": "cwe"
+          }
+        ],
+        "rating": {
+          "severity": "critical"
+        },
+        "risk": {},
+        "title": "Generic API Key"
+      },
+      "id": "c3219a44-422c-4a8e-8eaa-16b38211dece",
+      "links": {},
+      "relationships": {},
+      "type": "findings"
+    },
+    {
+      "attributes": {
+        "cause_of_failure": false,
+        "description": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+        "evidence": [],
+        "finding_type": "secret",
+        "key": "e92b840b-e02b-5a54-8846-511b035bce2a",
+        "locations": [
+          {
+            "file_path": "gcp-credentials.json",
+            "from_column": 20,
+            "from_line": 7,
+            "to_column": 1749,
+            "to_line": 7,
+            "type": "source"
+          }
+        ],
+        "policy_modifications": [
+          {
+            "pointer": "/attributes/rating/severity",
+            "reason": ""
+          }
+        ],
+        "problems": [
+          {
+            "id": "CWE-321",
+            "source": "cwe"
+          },
+          {
+            "categories": [
+              "Security"
+            ],
+            "help": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+            "id": "private-key",
+            "name": "Private Key",
+            "precision": "very-high",
+            "severity": "high",
+            "short_description": "Identified a Private Key, which may compromise cryptographic security and sensitive data encryption.",
+            "source": "secret",
+            "tags": []
+          }
+        ],
+        "rating": {
+          "severity": "critical"
+        },
+        "risk": {},
+        "suppression": {
+          "justification": "test",
+          "status": "ignored"
+        },
+        "title": "Private Key"
+      },
+      "id": "d01808f8-18ab-49fa-bb72-42d2cef37ef0",
+      "links": {},
+      "relationships": {},
+      "type": "findings"
+    },
+    {
+      "attributes": {
+        "cause_of_failure": false,
+        "description": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+        "evidence": [],
+        "finding_type": "secret",
+        "key": "db7fa3f6-eb0f-5c1e-a239-7ecc0ab121cd",
+        "locations": [
+          {
+            "file_path": "data/static/users.yml",
+            "from_column": 4,
+            "from_line": 88,
+            "to_column": 51,
+            "to_line": 88,
+            "type": "source"
+          }
+        ],
+        "policy_modifications": [
+          {
+            "pointer": "/attributes/rating/severity",
+            "reason": ""
+          }
+        ],
+        "problems": [
+          {
+            "categories": [
+              "Security"
+            ],
+            "help": "Do not hardcode passwords or other secrets directly in the source code. Use a secure secret management system instead.",
+            "id": "generic-api-key",
+            "name": "Generic API Key",
+            "precision": "very-high",
+            "severity": "high",
+            "short_description": "Detected a Generic API Key, potentially exposing access to various services and sensitive operations.",
+            "source": "secret",
+            "tags": []
+          },
+          {
+            "id": "CWE-798",
+            "source": "cwe"
+          }
+        ],
+        "rating": {
+          "severity": "critical"
+        },
+        "risk": {},
+        "title": "Generic API Key"
+      },
+      "id": "ed7a52d0-3dc1-4bd6-88d6-768dfdc82d58",
+      "links": {},
+      "relationships": {},
+      "type": "findings"
+    }
+  ],
+  "jsonapi": {
+    "version": "1.0"
+  },
+  "links": {
+    "first": "/orgs/782532e4-6a4a-424a-b153-b4852825d169/tests/20eaaffe-c585-4ce3-a2b6-f215b434f6b1/findings?version=2024-10-15&limit=10",
+    "self": "/orgs/782532e4-6a4a-424a-b153-b4852825d169/tests/20eaaffe-c585-4ce3-a2b6-f215b434f6b1/findings?version=2024-10-15&limit=10"
+  },
+  "meta": {
+    "count": 3,
+    "order": "asc",
+    "sorted-by": "id"
+  }
+}

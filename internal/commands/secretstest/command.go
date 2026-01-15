@@ -84,7 +84,7 @@ func (c *Command) RunWorkflow(
 ) ([]workflow.Data, error) {
 	c.Logger.Info().Msg("running secrets test workflow...")
 
-	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPaths, workingDir)
+	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPaths, inputPaths[0])
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPaths []string,
 		),
 		ff.WithLogger(c.Logger),
 	)
-
+	fmt.Println("WD: ", wd)
 	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths)
 	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, wd)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
@@ -14,6 +15,8 @@ func findCommonRoot(wd string, inputPaths []string) (rootFolderID, repoURL strin
 	if err != nil {
 		return "", "", fmt.Errorf("failed to determine common root: %w", err)
 	}
+	fmt.Println("Root folder ID (not relative):", rootFolderID)
+	fmt.Println("WD:", wd)
 
 	repoURL, err = git.RepoUrlFromDir(rootFolderID)
 	if err != nil {
@@ -24,12 +27,38 @@ func findCommonRoot(wd string, inputPaths []string) (rootFolderID, repoURL strin
 		return "", "", fmt.Errorf("repository at %s has no remote URL configured", rootFolderID)
 	}
 
-	rootFolder, err := filepath.Rel(wd, rootFolderID)
+	relRootFolder, err := filepath.Rel(inputPaths[0], rootFolderID)
 	if err != nil {
+		fmt.Println(err.Error())
 		return "", "", fmt.Errorf("could not determine relative root folder: %w", err)
 	}
+	if strings.HasPrefix(relRootFolder, "..") {
+		// wd is a child of the relRootFolder
+		relRootFolder, err = filepath.Rel(rootFolderID, inputPaths[0])
+		if err != nil {
+			fmt.Println(err.Error())
+			return "", "", fmt.Errorf("could not determine relative root folder: %w", err)
+		}
+	}
 
-	return rootFolder, repoURL, nil
+	if isFile(relRootFolder) {
+		relRootFolder = filepath.Dir(relRootFolder)
+	}
+
+	fmt.Println("Relative root folder id: ", relRootFolder)
+
+	return relRootFolder, repoURL, nil
+}
+
+func isFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		// The path likely doesn't exist or is inaccessible
+		return false
+	}
+
+	// If it's not a directory, it's a file (or a symlink/device)
+	return !info.IsDir()
 }
 
 func getDir(path string) (string, error) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 
@@ -40,6 +41,7 @@ func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,
 ) ([]workflow.Data, error) {
+	startTime := time.Now()
 	ctx := context.Background()
 	ctx = cmdctx.WithIctx(ctx, ictx)
 
@@ -78,6 +80,7 @@ func SecretsWorkflow(
 		}
 		absInputPaths[i] = filepath.Clean(absPath)
 	}
+	fmt.Println("INPUT PATH: ", inputPaths[0])
 
 	workingDir := config.GetString(configuration.WORKING_DIRECTORY)
 	if workingDir == "" {
@@ -89,9 +92,9 @@ func SecretsWorkflow(
 		workingDir = getwd
 	}
 
-	rootFolder, repoURL, err := findCommonRoot(workingDir, inputPaths)
+	rootFolder, repoURL, err := findCommonRoot(workingDir, absInputPaths)
 	if err != nil {
-		logger.Warn().Str("rootFolder", rootFolder).Str("repoURL", repoURL).Msg("could not determine common repo root")
+		logger.Warn().Str("rootFolder", rootFolder).Str("repoURL", repoURL).Msg("could not determine common repo root: " + err.Error())
 	}
 
 	c, err := NewCommand(ictx, u, orgID, rootFolder, repoURL, NewWorkflowClients)
@@ -100,12 +103,14 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
 	}
 
-	logger.Info().Str("workingDir", workingDir).Strs("absInputPaths", absInputPaths).Msg("Running secrets workflow...")
+	logger.Info().Str("workingDir", workingDir).Strs("absInputPaths", absInputPaths).Str("repoURL", repoURL).Str("rootFolder", rootFolder).Msg("Running secrets workflow...")
 	output, err := c.RunWorkflow(ctx, absInputPaths, workingDir)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralSecretsFailureError("workflow execution failed")
 	}
 
+	duration := time.Since(startTime)
+	logger.Info().Msg("duration: " + duration.String())
 	return output, nil
 }

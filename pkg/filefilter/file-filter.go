@@ -93,6 +93,7 @@ func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string 
 				}
 
 				if keep {
+					//fmt.Println("KEEP: ", path)
 					select {
 					case filteredFiles <- path:
 					case <-ctx.Done():
