@@ -185,6 +185,24 @@ func TestPipeline_Configuration(t *testing.T) {
 			t.Errorf("expected 2 filters when chaining options, got %d", len(p2.filters))
 		}
 	})
+
+	t.Run("WithExcludeGlobs", func(t *testing.T) {
+		defaultGlobsLen := len(getCustomGlobIgnoreRules())
+		userPatterns := []string{"node_modules/*,package.json"}
+
+		p := NewPipeline(WithExcludeGlobs(userPatterns))
+		expectedLen := defaultGlobsLen + len(userPatterns)
+
+		if len(p.customGlobPatterns) != expectedLen {
+			t.Errorf("expected custom patterns %d, got %d", expectedLen, len(p.customGlobPatterns))
+		}
+
+		// Check len with no excludes
+		pDefault := NewPipeline()
+		if len(pDefault.customGlobPatterns) != defaultGlobsLen {
+			t.Errorf("default globs not initialized %d, got %d", expectedLen, len(pDefault.customGlobPatterns))
+		}
+	})
 }
 
 // TestFilter_ConcurrencyStress checks for race conditions and data loss.

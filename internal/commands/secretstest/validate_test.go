@@ -355,6 +355,76 @@ func TestValidateFlagsConfig(t *testing.T) {
 	}
 }
 
+func TestParseExcludeFlag(t *testing.T) {
+	testCases := []struct {
+		in     map[string]any
+		hasErr bool
+		desc   string
+	}{
+		{
+			in:     map[string]any{},
+			hasErr: false,
+			desc:   "no --exclude set, no validation needed",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "file.txt",
+			},
+			hasErr: false,
+			desc:   "valid --exclude (single file)",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "dir1,file2.txt",
+			},
+			hasErr: false,
+			desc:   "valid --exclude (comma separated list)",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "",
+			},
+			hasErr: true,
+			desc:   "invalid empty --exclude",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "   ",
+			},
+			hasErr: true,
+			desc:   "invalid whitespace --exclude",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "path/to/file",
+			},
+			hasErr: true,
+			desc:   "invalid --exclude with forward slash",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: `path\to\file`,
+			},
+			hasErr: true,
+			desc:   "invalid --exclude with backward slash",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := setupMockConfig(tc.in)
+
+			_, err := parseExcludeFlag(config)
+
+			if tc.hasErr {
+				assert.NotNil(t, err)
+				return
+			}
+			assert.Nil(t, err)
+		})
+	}
+}
+
 func setupMockConfig(flagValues map[string]any) configuration.Configuration {
 	config := configuration.New()
 
