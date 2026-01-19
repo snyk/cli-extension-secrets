@@ -59,6 +59,22 @@ func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	assert.Contains(t, err.(snyk_errors.Error).Detail, "No org provided.")
 }
 
+func TestSecretsWorkflow_TooManyInputPaths(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{".", "other path"})
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	assert.Error(t, err)
+	//nolint:errorlint // we want to check the snyk_error detail.
+	assert.Contains(t, err.(snyk_errors.Error).Detail, "Only one input path is accepted.")
+}
+
 func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

@@ -3,7 +3,6 @@ package secretstest
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
@@ -69,39 +68,34 @@ func SecretsWorkflow(
 	}
 
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
-	absInputPaths := make([]string, len(inputPaths))
-	for i, p := range inputPaths {
-		absPath, absErr := filepath.Abs(p)
-		if absErr != nil {
-			logger.Error().Err(absErr).Msg("could not get absolute path for: " + p)
-			return nil, cli_errors.NewGeneralSecretsFailureError("Unable to get absolute path")
-		}
-		absInputPaths[i] = filepath.Clean(absPath)
+	if len(inputPaths) != 1 {
+		return nil, cli_errors.NewValidationFailureError("Only one input path is accepted.")
 	}
 
-	workingDir := config.GetString(configuration.WORKING_DIRECTORY)
-	if workingDir == "" {
-		getwd, gerr := os.Getwd()
-		if gerr != nil {
-			logger.Error().Err(gerr).Msg("could not get current working directory")
-			return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
-		}
-		workingDir = getwd
-	}
-
-	rootFolder, repoURL, err := findCommonRoot(workingDir, inputPaths)
+	inputPath, err := filepath.Abs(inputPaths[0])
 	if err != nil {
-		logger.Warn().Str("rootFolder", rootFolder).Str("repoURL", repoURL).Msg("could not determine common repo root")
+		logger.Error().Err(err).Msg("could not get absolute path for: " + inputPaths[0])
+		return nil, cli_errors.NewGeneralSecretsFailureError("Unable to get absolute path")
 	}
 
-	c, err := NewCommand(ictx, u, orgID, rootFolder, repoURL, NewWorkflowClients)
+	repoURL, gitRootDir, err := findGitRoot(inputPath)
+	if err != nil {
+		logger.Err(err).Str("dir", gitRootDir).Str("repoURL", repoURL).Msg("could not determine common repo root")
+	}
+
+	inputPathRelativeToGitRoot, err := computeRelativeInput(inputPath, gitRootDir)
+	if err != nil {
+		logger.Err(err).Str("inputPathRelativeToGitRoot", inputPathRelativeToGitRoot).Msg("could not determine common repo root")
+	}
+
+	c, err := NewCommand(ictx, u, orgID, inputPathRelativeToGitRoot, repoURL, NewWorkflowClients)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not initialize command")
 		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
 	}
 
-	logger.Info().Str("workingDir", workingDir).Strs("absInputPaths", absInputPaths).Msg("Running secrets workflow...")
-	output, err := c.RunWorkflow(ctx, absInputPaths, workingDir)
+	logger.Info().Str("inputPath", inputPath).Msg("Running secrets workflow...")
+	output, err := c.RunWorkflow(ctx, inputPath)
 	if err != nil {
 		logger.Error().Err(err).Msg("workflow execution failed")
 		return nil, cli_errors.NewGeneralSecretsFailureError("workflow execution failed")

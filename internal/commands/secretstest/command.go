@@ -3,6 +3,7 @@ package secretstest
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -79,12 +80,11 @@ func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID, roo
 
 func (c *Command) RunWorkflow(
 	ctx context.Context,
-	inputPaths []string,
-	workingDir string,
+	inputPath string,
 ) ([]workflow.Data, error) {
 	c.Logger.Info().Msg("running secrets test workflow...")
 
-	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPaths, workingDir)
+	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPath)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (c *Command) RunWorkflow(
 	return output, err
 }
 
-func (c *Command) filterAndUploadFiles(ctx context.Context, inputPaths []string, wd string) (string, error) {
+func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
 	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FilterAndUploadFilesTimeout)
 	defer cancelFindFiles()
 
@@ -116,9 +116,19 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPaths []string,
 		),
 		ff.WithLogger(c.Logger),
 	)
+	pathsChan := textFilesFilter.Filter(uploadCtx, []string{inputPath})
 
-	pathsChan := textFilesFilter.Filter(uploadCtx, inputPaths)
-	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, wd)
+	// for file inputPath we need to compute the relativity of the file path w.r.t. the file's dir
+	dir := inputPath
+	ok, err := isFile(inputPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to determine if inputPath is a file: %w", err)
+	}
+	if ok {
+		dir = filepath.Dir(inputPath)
+	}
+
+	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
 	if err != nil {
 		return "", c.ErrorFactory.CreateRevisionError(err)
 	}

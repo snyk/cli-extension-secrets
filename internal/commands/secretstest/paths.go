@@ -5,31 +5,65 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
-func findCommonRoot(wd string, inputPaths []string) (rootFolderID, repoURL string, err error) {
-	rootFolderID, err = getRootFolderID(inputPaths)
+var repoURLFromDirFunc = git.RepoUrlFromDir
+
+func findGitRoot(inputPath string) (repoURL, gitRootFolder string, err error) {
+	gitRootFolder, err = getRootFolderID(inputPath)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to determine common root: %w", err)
+		return "", "", fmt.Errorf("failed to determine git root: %w", err)
 	}
 
-	repoURL, err = git.RepoUrlFromDir(rootFolderID)
+	repoURL, err = repoURLFromDirFunc(gitRootFolder)
 	if err != nil {
-		return "", "", fmt.Errorf("could not get repository URL for %s: %w", rootFolderID, err)
+		return "", "", fmt.Errorf("could not get repository URL for %s: %w", gitRootFolder, err)
 	}
 
 	if repoURL == "" {
-		return "", "", fmt.Errorf("repository at %s has no remote URL configured", rootFolderID)
+		return "", "", fmt.Errorf("repository at %s has no remote URL configured", gitRootFolder)
 	}
 
-	rootFolder, err := filepath.Rel(wd, rootFolderID)
+	return repoURL, gitRootFolder, nil
+}
+
+func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath string, err error) {
+	// file input paths need to be treated as a separate case
+	// we want to compute the relativity of the file's directory to the gitRootFolder -> this will give the correct relativeInputPath
+	ok, err := isFile(inputPath)
 	if err != nil {
-		return "", "", fmt.Errorf("could not determine relative root folder: %w", err)
+		return "", fmt.Errorf("could not determine if %s is a file: %w", inputPath, err)
+	}
+	if ok {
+		inputPath = filepath.Dir(inputPath)
 	}
 
-	return rootFolder, repoURL, nil
+	// input path is outside the gitRootFolder
+	relativeInputPath, err = filepath.Rel(inputPath, gitRootFolder)
+	if err != nil {
+		return "", fmt.Errorf("could not determine relative root folder: %w", err)
+	}
+	if strings.HasPrefix(relativeInputPath, "..") {
+		// input path is a child of the gitRootFolder
+		relativeInputPath, err = filepath.Rel(gitRootFolder, inputPath)
+		if err != nil {
+			return "", fmt.Errorf("could not determine relative root folder: %w", err)
+		}
+	}
+
+	return relativeInputPath, nil
+}
+
+func isFile(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+
+	return !info.IsDir(), nil
 }
 
 func getDir(path string) (string, error) {
@@ -45,46 +79,22 @@ func getDir(path string) (string, error) {
 	return filepath.Dir(path), nil
 }
 
-func getRootFolderID(inputPaths []string) (string, error) {
-	if len(inputPaths) == 0 {
-		return "", fmt.Errorf("no paths provided")
+func getRootFolderID(inputPath string) (string, error) {
+	if inputPath == "" {
+		return "", fmt.Errorf("no path provided")
 	}
 
-	var rootFolderID string
-
-	seenDirs := make(map[string]string)
-
-	for _, path := range inputPaths {
-		var gitRoot string
-
-		parentDir, err := getDir(path)
-		if err != nil {
-			return "", fmt.Errorf("can't stat %s: %w", path, err)
-		}
-
-		resolved, ok := seenDirs[parentDir]
-
-		if ok {
-			gitRoot = resolved
-		} else {
-			gd, err := walkUpDirToGit(parentDir)
-			if err != nil {
-				return "", fmt.Errorf("could not find git root for %s: %w", path, err)
-			}
-			gitRoot = gd
-			seenDirs[parentDir] = gd
-		}
-
-		// if rootDir is set, but we find a new git root, return error
-		if rootFolderID != "" && rootFolderID != gitRoot {
-			return "", fmt.Errorf("ambiguous root: paths belong to multiple repositories (%s and %s)", rootFolderID, gitRoot)
-		}
-		if rootFolderID == "" {
-			rootFolderID = gitRoot
-		}
+	parentDir, err := getDir(inputPath)
+	if err != nil {
+		return "", fmt.Errorf("can't stat %s: %w", inputPath, err)
 	}
 
-	return rootFolderID, nil
+	gd, err := walkUpDirToGit(parentDir)
+	if err != nil {
+		return "", fmt.Errorf("could not find git root for %s: %w", inputPath, err)
+	}
+
+	return gd, nil
 }
 
 // that contains a .git folder and returns the parent of the .git folder.

@@ -86,7 +86,7 @@ func TestCommand_RunWorkflow_Success(t *testing.T) {
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	// Execute
-	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	output, err := cmd.RunWorkflow(ctx, ".")
 
 	// Assert
 	assert.NoError(t, err)
@@ -114,7 +114,7 @@ func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{}, errors.New("upload failed"))
 
-	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	_, err := cmd.RunWorkflow(ctx, ".")
 	assert.NotEmpty(t, err)
 	assert.Contains(t, err.Error(), "upload failed")
 }
@@ -134,7 +134,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	_, err := cmd.RunWorkflow(ctx, ".")
 	assert.NotEmpty(t, err)
 	assert.Contains(t, err.Error(), "start test failed")
 }
@@ -157,7 +157,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	_, err := cmd.RunWorkflow(ctx, ".")
 	assert.NotEmpty(t, err)
 	assert.Contains(t, err.Error(), "wait failed")
 }
@@ -184,7 +184,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) 
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	_, err := cmd.RunWorkflow(ctx, ".")
 	assert.NotEmpty(t, err)
 	assert.Contains(t, err.Error(), "test execution error: test completed but findings could not be retrieved")
 }
@@ -215,7 +215,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
+	_, err := cmd.RunWorkflow(ctx, ".")
 	assert.NotEmpty(t, err)
 	assert.Contains(t, err.Error(), "scanner error")
 }
