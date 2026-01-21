@@ -17,9 +17,10 @@ type FileFilter interface {
 
 // Pipeline holds the configuration for the filtering process.
 type Pipeline struct {
-	logger      *zerolog.Logger
-	concurrency int
-	filters     []FileFilter
+	logger             *zerolog.Logger
+	concurrency        int
+	filters            []FileFilter
+	customGlobPatterns []string
 }
 
 // Option defines the functional option type.
@@ -30,8 +31,9 @@ type Option func(*Pipeline)
 func NewPipeline(opts ...Option) *Pipeline {
 	// Default values
 	p := &Pipeline{
-		concurrency: runtime.NumCPU(),
-		filters:     []FileFilter{},
+		concurrency:        runtime.NumCPU(),
+		filters:            []FileFilter{},
+		customGlobPatterns: getCustomGlobIgnoreRules(),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -62,10 +64,19 @@ func WithFilters(filters ...FileFilter) Option {
 	}
 }
 
+// WithExcludeGlobs adds user-defined patterns to the pipeline's exclude list.
+func WithExcludeGlobs(userPatterns []string) Option {
+	return func(p *Pipeline) {
+		if len(userPatterns) > 0 {
+			p.customGlobPatterns = append(p.customGlobPatterns, userPatterns...)
+		}
+	}
+}
+
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
 func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
-	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, getCustomGlobIgnoreRules(), p.logger)
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)

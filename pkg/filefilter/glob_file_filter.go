@@ -1,5 +1,12 @@
 package filefilter
 
+import (
+	"errors"
+	"strings"
+)
+
+var ErrPathNotAllowed = errors.New("paths are not allowed in exclude rules")
+
 var ignoredExtensionsGlob = []string{
 	"*.bmp", "*.dcm", "*.gif", "*.iff",
 	"*.jpg", "*.jpeg", "*.pbm", "*.pict",
@@ -89,4 +96,26 @@ func getCustomGlobIgnoreRules() []string {
 	customRules = append(customRules, ignoredExtensionsGlob...)
 	customRules = append(customRules, ignoreGenericFilesGlob...)
 	return customRules
+}
+
+// ExpandExcludeNames validates and converts user-provided names into global glob patterns.
+// It enforces the rule that inputs must be basenames (example: "node_modules"), not paths.
+func ExpandExcludeNames(names []string) ([]string, error) {
+	patterns := make([]string, 0, len(names)*2)
+	for _, entry := range names {
+		trimmed := strings.TrimSpace(entry)
+		if trimmed == "" {
+			continue
+		}
+
+		if strings.ContainsAny(trimmed, "/\\") {
+			return nil, ErrPathNotAllowed
+		}
+
+		patterns = append(patterns,
+			"**/"+trimmed,
+			"**/"+trimmed+"/**",
+		)
+	}
+	return patterns, nil
 }

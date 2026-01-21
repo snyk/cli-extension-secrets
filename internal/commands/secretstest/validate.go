@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
+
+	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
 var (
@@ -46,7 +49,6 @@ func validateFlagsConfig(config configuration.Configuration) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -175,6 +177,25 @@ func validateTags(config configuration.Configuration) error {
 	}
 
 	return nil
+}
+
+func parseExcludeFlag(config configuration.Configuration) ([]string, error) {
+	if !config.IsSet(FlagExcludeFilePath) {
+		return nil, nil
+	}
+
+	rawExcludeFlag := strings.TrimSpace(config.GetString(FlagExcludeFilePath))
+	if rawExcludeFlag == "" {
+		return nil, errors.New("Empty --exclude argument. Did you mean --exclude=subdirectory?")
+	}
+
+	excludeGlobs, err := ff.ExpandExcludeNames(strings.Split(rawExcludeFlag, ","))
+	if err != nil {
+		return nil, cli_errors.NewValidationFailureError(
+			"The --exclude argument must be a comma separated list of directory or file names and cannot contain a path.",
+		)
+	}
+	return excludeGlobs, nil
 }
 
 func getKeys(m map[string]struct{}) []string {

@@ -88,7 +88,21 @@ func SecretsWorkflow(
 		logger.Err(err).Str("inputPathRelativeToGitRoot", inputPathRelativeToGitRoot).Msg("could not determine common repo root")
 	}
 
-	c, err := NewCommand(ictx, u, orgID, inputPathRelativeToGitRoot, repoURL, NewWorkflowClients)
+	excludeGlobs, err := parseExcludeFlag(config)
+	if err != nil {
+		return nil, cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
+	}
+
+	args := &CommandArgs{
+		InvocationContext: ictx,
+		UserInterface:     u,
+		OrgID:             orgID,
+		RootFolderID:      inputPathRelativeToGitRoot,
+		RepoURL:           repoURL,
+		GetClients:        NewWorkflowClients,
+		Excludes:          excludeGlobs,
+	}
+	c, err := NewCommand(args)
 	if err != nil {
 		logger.Error().Err(err).Msg("could not initialize command")
 		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)

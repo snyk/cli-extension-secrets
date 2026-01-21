@@ -24,6 +24,16 @@ const (
 	LogFieldCount               = "count"
 )
 
+type CommandArgs struct {
+	InvocationContext workflow.InvocationContext
+	UserInterface     *CLIUserInterface
+	GetClients        newClientsFunc
+	OrgID             string
+	RootFolderID      string
+	RepoURL           string
+	Excludes          []string
+}
+
 type Command struct {
 	Logger        *zerolog.Logger
 	OrgID         string
@@ -59,10 +69,16 @@ func NewWorkflowClients(ictx workflow.InvocationContext, orgID string) (*Workflo
 	}, nil
 }
 
-func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID, rootFolderID, repoURL string, getClients newClientsFunc) (*Command, error) {
-	logger := ictx.GetEnhancedLogger()
+func NewCommand(args *CommandArgs) (*Command, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args is nil")
+	}
+	if args.GetClients == nil {
+		return nil, fmt.Errorf("GetClients function must be provided")
+	}
+	logger := args.InvocationContext.GetEnhancedLogger()
 
-	clients, err := getClients(ictx, orgID)
+	clients, err := args.GetClients(args.InvocationContext, args.OrgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create clients: %w", err)
 	}
@@ -70,11 +86,12 @@ func NewCommand(ictx workflow.InvocationContext, u *CLIUserInterface, orgID, roo
 	return &Command{
 		Logger:        logger,
 		Clients:       clients,
-		OrgID:         orgID,
-		RepoURL:       repoURL,
-		RootFolderID:  rootFolderID,
+		OrgID:         args.OrgID,
+		RepoURL:       args.RepoURL,
+		RootFolderID:  args.RootFolderID,
 		ErrorFactory:  NewErrorFactory(logger),
-		UserInterface: u,
+		UserInterface: args.UserInterface,
+		Excludes:      args.Excludes,
 	}, nil
 }
 
@@ -110,6 +127,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
+		ff.WithExcludeGlobs(c.Excludes),
 		ff.WithFilters(
 			ff.FileSizeFilter(c.Logger),
 			ff.TextFileOnlyFilter(c.Logger),
