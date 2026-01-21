@@ -78,14 +78,10 @@ func SecretsWorkflow(
 		return nil, cli_errors.NewGeneralSecretsFailureError("Unable to get absolute path")
 	}
 
-	repoURL, gitRootDir, err := findGitRoot(inputPath)
+	remoteRepoURLFlag := config.GetString(FlagRemoteRepoURL)
+	repoURL, inputPathRelativeToGitRoot, err := computeGitRootAndRepoURL(inputPath, remoteRepoURLFlag)
 	if err != nil {
-		logger.Err(err).Str("dir", gitRootDir).Str("repoURL", repoURL).Msg("could not determine common repo root")
-	}
-
-	inputPathRelativeToGitRoot, err := computeRelativeInput(inputPath, gitRootDir)
-	if err != nil {
-		logger.Err(err).Str("inputPathRelativeToGitRoot", inputPathRelativeToGitRoot).Msg("could not determine common repo root")
+		logger.Err(err).Str("remoteRepoURLFlag", remoteRepoURLFlag).Str("inputPath", inputPath).Msg("could not compute gitRoot or repoURL")
 	}
 
 	excludeGlobs, err := parseExcludeFlag(config)

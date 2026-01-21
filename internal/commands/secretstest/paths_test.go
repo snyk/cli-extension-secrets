@@ -17,7 +17,7 @@ func TestFindGitRoot(t *testing.T) {
 
 	tempDir := t.TempDir()
 	dir1 := filepath.Join(tempDir, "my-dir")
-	err := os.MkdirAll(filepath.Join(dir1, ".git"), 0o755)
+	err := os.MkdirAll(filepath.Join(dir1, Git), 0o755)
 	assert.NoError(t, err)
 
 	fileInRootPath := filepath.Join(dir1, "file.txt")
@@ -187,6 +187,98 @@ func TestComputeRelativeInput(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedPath, relativeFolder)
 			}
+		})
+	}
+}
+
+func TestComputeGitRootAndRepoUrl(t *testing.T) {
+	tempDir := t.TempDir()
+	projRootDir := filepath.Join(tempDir, "project-root")
+	err := os.MkdirAll(projRootDir, 0o755)
+	assert.NoError(t, err)
+
+	err = os.MkdirAll(filepath.Join(projRootDir, Git), 0o755)
+	assert.NoError(t, err)
+
+	fileInRootPath := filepath.Join(projRootDir, ".env")
+	fileInRoot, err := os.Create(fileInRootPath)
+	assert.NoError(t, err)
+	assert.NoError(t, fileInRoot.Close())
+
+	projSubDirPath := filepath.Join(projRootDir, "src")
+	err = os.MkdirAll(projSubDirPath, 0o755)
+	assert.NoError(t, err)
+
+	fileInSubdirPath := filepath.Join(projRootDir, "src", "main.js")
+	fileInSubdir, err := os.Create(fileInSubdirPath)
+	assert.NoError(t, err)
+	assert.NoError(t, fileInSubdir.Close())
+
+	nonProjDir := filepath.Join(tempDir, "non-proj-dir")
+	err = os.MkdirAll(nonProjDir, 0o755)
+	assert.NoError(t, err)
+
+	fileInNonGitDirPath := filepath.Join(nonProjDir, "non-proj-file.txt")
+	fileInNonGitDir, err := os.Create(fileInNonGitDirPath)
+	assert.NoError(t, err)
+	assert.NoError(t, fileInNonGitDir.Close())
+
+	mockGitRepoURL := "https://github.com/snyk/my-repo.git"
+	flagRemoteRepoURL := "https://github.com/snyk/a-different-repo.git"
+
+	testCases := []struct {
+		name                               string
+		inputPath                          string
+		remoteRepoURLFlag                  string
+		expectedRepoURL                    string
+		expectedInputPathRelativeToGitRoot string
+	}{
+		{
+			name:                               "local git root and no flag",
+			inputPath:                          projRootDir,
+			remoteRepoURLFlag:                  "",
+			expectedRepoURL:                    mockGitRepoURL,
+			expectedInputPathRelativeToGitRoot: ".",
+		},
+		{
+			name:                               "nested file in local git and no flag",
+			inputPath:                          fileInSubdirPath,
+			remoteRepoURLFlag:                  "",
+			expectedRepoURL:                    mockGitRepoURL,
+			expectedInputPathRelativeToGitRoot: "src",
+		},
+		{
+			name:                               "local git root and flag",
+			inputPath:                          fileInSubdirPath,
+			expectedRepoURL:                    mockGitRepoURL,
+			expectedInputPathRelativeToGitRoot: "src",
+		},
+		{
+			name:                               "no local git root and no flag",
+			inputPath:                          fileInNonGitDirPath,
+			expectedInputPathRelativeToGitRoot: ".",
+			expectedRepoURL:                    "",
+		},
+		{
+			name:                               "no local git and flag",
+			inputPath:                          nonProjDir,
+			remoteRepoURLFlag:                  flagRemoteRepoURL,
+			expectedRepoURL:                    flagRemoteRepoURL,
+			expectedInputPathRelativeToGitRoot: ".",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			repoURLFromDirFunc = func(_ string) (string, error) {
+				return mockGitRepoURL, nil
+			}
+
+			repoURL, inputPathRelativeToGitRoot, err := computeGitRootAndRepoURL(tc.inputPath, tc.remoteRepoURLFlag)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expectedRepoURL, repoURL)
+			assert.Equal(t, tc.expectedInputPathRelativeToGitRoot, inputPathRelativeToGitRoot)
 		})
 	}
 }

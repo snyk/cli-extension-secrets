@@ -7,10 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
-var repoURLFromDirFunc = git.RepoUrlFromDir
+var (
+	Git                = ".git"
+	repoURLFromDirFunc = git.RepoUrlFromDir
+)
 
 func findGitRoot(inputPath string) (repoURL, gitRootFolder string, err error) {
 	gitRootFolder, err = getRootFolderID(inputPath)
@@ -55,6 +60,24 @@ func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath st
 	}
 
 	return relativeInputPath, nil
+}
+
+func computeGitRootAndRepoURL(inputPath, remoteRepoURLFlag string) (repoURL, inputPathRelativeToGitRoot string, err error) {
+	repoURL, gitRootDir, err := findGitRoot(inputPath)
+
+	if err == nil {
+		inputPathRelativeToGitRoot, err = computeRelativeInput(inputPath, gitRootDir)
+		if err != nil {
+			return "", "", cli_errors.NewGeneralSecretsFailureError("could not compute relative path from input to git root", snyk_errors.WithCause(err))
+		}
+	} else {
+		// will be either the flag value or empty string if not set
+		repoURL = remoteRepoURLFlag
+		// in case of no .git, we assume the input path dir as root
+		inputPathRelativeToGitRoot = "."
+	}
+
+	return repoURL, inputPathRelativeToGitRoot, nil
 }
 
 func isFile(path string) (bool, error) {
@@ -107,7 +130,7 @@ func walkUpDirToGit(startPath string) (string, error) {
 	current := absPath
 
 	for {
-		target := filepath.Join(current, ".git")
+		target := filepath.Join(current, Git)
 
 		info, err := os.Stat(target)
 
