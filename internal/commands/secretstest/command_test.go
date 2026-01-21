@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	gafclientmocks "github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -115,8 +116,8 @@ func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{}, errors.New("upload failed"))
 
 	_, err := cmd.RunWorkflow(ctx, ".")
-	assert.NotEmpty(t, err)
-	assert.Contains(t, err.Error(), "upload failed")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Cause.Error(), "upload failed")
 }
 
 func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
@@ -135,8 +136,8 @@ func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
 	_, err := cmd.RunWorkflow(ctx, ".")
-	assert.NotEmpty(t, err)
-	assert.Contains(t, err.Error(), "start test failed")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Cause.Error(), "start test failed")
 }
 
 func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
@@ -158,8 +159,8 @@ func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
 	_, err := cmd.RunWorkflow(ctx, ".")
-	assert.NotEmpty(t, err)
-	assert.Contains(t, err.Error(), "wait failed")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Cause.Error(), "wait failed")
 }
 
 func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) {
@@ -185,8 +186,8 @@ func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
 	_, err := cmd.RunWorkflow(ctx, ".")
-	assert.NotEmpty(t, err)
-	assert.Contains(t, err.Error(), "test execution error: test completed but findings could not be retrieved")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Cause.Error(), "test execution error: test completed but findings could not be retrieved")
 }
 
 func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T) {
@@ -216,8 +217,8 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
 	_, err := cmd.RunWorkflow(ctx, ".")
-	assert.NotEmpty(t, err)
-	assert.Contains(t, err.Error(), "scanner error")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Cause.Error(), "scanner error")
 }
 
 func setupTestCommand(t *testing.T, ctrl *gomock.Controller) (*WorkflowClients, *mock_secretstest.MockUserInterface, *Command) {
@@ -242,4 +243,19 @@ func setupTestCommand(t *testing.T, ctrl *gomock.Controller) (*WorkflowClients, 
 	}
 
 	return mockClients, mockUI, cmd
+}
+
+// requireCatalogError ensures the error is a Snyk Catalog Error.
+// It fails the test immediately if the error is nil or the wrong type.
+func requireCatalogError(t *testing.T, err error) snyk_errors.Error {
+	t.Helper()
+	if err == nil {
+		t.Fatal("Expected an error, but got nil")
+	}
+
+	var catalogErr snyk_errors.Error
+	if !errors.As(err, &catalogErr) {
+		t.Fatalf("Expected a snyk_errors.Error, but got: %T (%v)", err, err)
+	}
+	return catalogErr
 }

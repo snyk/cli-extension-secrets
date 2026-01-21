@@ -32,6 +32,7 @@ type CommandArgs struct {
 	RootFolderID      string
 	RepoURL           string
 	Excludes          []string
+	ErrorFactory      *ErrorFactory
 }
 
 type Command struct {
@@ -89,7 +90,7 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 		OrgID:         args.OrgID,
 		RepoURL:       args.RepoURL,
 		RootFolderID:  args.RootFolderID,
-		ErrorFactory:  NewErrorFactory(logger),
+		ErrorFactory:  args.ErrorFactory,
 		UserInterface: args.UserInterface,
 		Excludes:      args.Excludes,
 	}, nil
@@ -115,7 +116,7 @@ func (c *Command) RunWorkflow(
 	c.UserInterface.SetTitle(TitleRetrievingResults)
 	output, err := prepareOutput(ctx, testResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare output: %w", err)
+		return nil, c.ErrorFactory.NewPrepareOutputError(err)
 	}
 
 	return output, err
@@ -148,7 +149,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 
 	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
 	if err != nil {
-		return "", c.ErrorFactory.CreateRevisionError(err)
+		return "", c.ErrorFactory.NewUploadError(err)
 	}
 	c.Logger.Info().Msg(fmt.Sprintf("Revision ID: %s", uploadRevision.RevisionID))
 
@@ -159,7 +160,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testapi.TestResult, error) {
 	testResource, err := createTestResource(uploadRevision, c.RepoURL, c.RootFolderID)
 	if err != nil {
-		return nil, c.ErrorFactory.CreateTestResourceError(err)
+		return nil, c.ErrorFactory.NewTestResourceError(err)
 	}
 
 	param := testapi.StartTestParams{
@@ -171,7 +172,7 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 
 	testResult, err := c.executeTest(ctx, param)
 	if err != nil {
-		return nil, c.ErrorFactory.ExecuteTestError(err)
+		return nil, c.ErrorFactory.NewExecuteTestError(err)
 	}
 
 	return testResult, nil
