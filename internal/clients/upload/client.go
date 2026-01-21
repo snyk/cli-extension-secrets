@@ -10,6 +10,10 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+var ErrNoFilesProvided = fileupload.ErrNoFilesProvided
+
+type FileCountLimitError = fileupload.FileCountLimitError
+
 type Client interface {
 	CreateRevisionFromChan(ctx context.Context, paths <-chan string, baseDir string) (fileupload.UploadResult, error)
 }
