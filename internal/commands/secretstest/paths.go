@@ -10,24 +10,48 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
-var repoURLFromDirFunc = git.RepoUrlFromDir
+var (
+	Git                = ".git"
+	repoURLFromDirFunc = git.RepoUrlFromDir
+)
 
-func findGitRoot(inputPath string) (repoURL, gitRootFolder string, err error) {
-	gitRootFolder, err = getRootFolderID(inputPath)
+func findGitRoot(inputPath string) (string, error) {
+	if inputPath == "" {
+		return "", fmt.Errorf("no path provided")
+	}
+
+	parentDir, err := getDir(inputPath)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to determine git root: %w", err)
+		return "", fmt.Errorf("can't stat %s: %w", inputPath, err)
+	}
+
+	gd, err := walkUpDirToGit(parentDir)
+	if err != nil {
+		return "", fmt.Errorf("could not find git root for %s: %w", inputPath, err)
+	}
+
+	return gd, nil
+}
+
+func findRepoURLWithOverride(gitRootFolder, remoteRepoURLFlag string) (repoURL string, err error) {
+	if remoteRepoURLFlag != "" {
+		return remoteRepoURLFlag, nil
+	}
+
+	if gitRootFolder == "" {
+		return "", fmt.Errorf("repository URL could not be determined, git root not found and remote repo url flag not set")
 	}
 
 	repoURL, err = repoURLFromDirFunc(gitRootFolder)
 	if err != nil {
-		return "", "", fmt.Errorf("could not get repository URL for %s: %w", gitRootFolder, err)
+		return "", fmt.Errorf("no remote repository URL configured for %s: %w", gitRootFolder, err)
 	}
 
 	if repoURL == "" {
-		return "", "", fmt.Errorf("repository at %s has no remote URL configured", gitRootFolder)
+		return "", fmt.Errorf("empty remote repository URL found at %s", gitRootFolder)
 	}
 
-	return repoURL, gitRootFolder, nil
+	return repoURL, nil
 }
 
 func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath string, err error) {
@@ -79,24 +103,6 @@ func getDir(path string) (string, error) {
 	return filepath.Dir(path), nil
 }
 
-func getRootFolderID(inputPath string) (string, error) {
-	if inputPath == "" {
-		return "", fmt.Errorf("no path provided")
-	}
-
-	parentDir, err := getDir(inputPath)
-	if err != nil {
-		return "", fmt.Errorf("can't stat %s: %w", inputPath, err)
-	}
-
-	gd, err := walkUpDirToGit(parentDir)
-	if err != nil {
-		return "", fmt.Errorf("could not find git root for %s: %w", inputPath, err)
-	}
-
-	return gd, nil
-}
-
 // that contains a .git folder and returns the parent of the .git folder.
 func walkUpDirToGit(startPath string) (string, error) {
 	absPath, err := filepath.Abs(startPath)
@@ -107,7 +113,7 @@ func walkUpDirToGit(startPath string) (string, error) {
 	current := absPath
 
 	for {
-		target := filepath.Join(current, ".git")
+		target := filepath.Join(current, Git)
 
 		info, err := os.Stat(target)
 

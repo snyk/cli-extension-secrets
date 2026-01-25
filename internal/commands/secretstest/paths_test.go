@@ -17,7 +17,7 @@ func TestFindGitRoot(t *testing.T) {
 
 	tempDir := t.TempDir()
 	dir1 := filepath.Join(tempDir, "my-dir")
-	err := os.MkdirAll(filepath.Join(dir1, ".git"), 0o755)
+	err := os.MkdirAll(filepath.Join(dir1, Git), 0o755)
 	assert.NoError(t, err)
 
 	fileInRootPath := filepath.Join(dir1, "file.txt")
@@ -45,62 +45,38 @@ func TestFindGitRoot(t *testing.T) {
 		inputPath         string
 		expectErr         bool
 		expectedErrString string
-		mockRepoURL       string
 		mockRepoURLErr    error
 		expectedRoot      string
-		expectedRepoURL   string
 	}{
 		{
-			name:            "input path is a file in the repo root",
-			inputPath:       fileInRootPath,
-			mockRepoURL:     "https://github.com/snyk/my-repo.git",
-			expectedRoot:    dir1,
-			expectedRepoURL: "https://github.com/snyk/my-repo.git",
-			expectErr:       false,
+			name:         "input path is a file in the repo root",
+			inputPath:    fileInRootPath,
+			expectedRoot: dir1,
+			expectErr:    false,
 		},
 		{
-			name:            "input path is a file in the repo subdir",
-			inputPath:       fileInSubdirPath,
-			mockRepoURL:     "https://github.com/snyk/my-repo.git",
-			expectedRoot:    dir1,
-			expectedRepoURL: "https://github.com/snyk/my-repo.git",
-			expectErr:       false,
+			name:         "input path is a file in the repo subdir",
+			inputPath:    fileInSubdirPath,
+			expectedRoot: dir1,
+			expectErr:    false,
 		},
 		{
 			name:              "input path is a file in a non-git dir",
 			inputPath:         fileInNonGitDirPath,
-			mockRepoURL:       "",
-			mockRepoURLErr:    errors.New("not a git dir"),
 			expectedRoot:      "",
-			expectedRepoURL:   "",
 			expectErr:         true,
 			expectedErrString: "reached root without finding target",
-		},
-		{
-			name:              "input path is a file in a git dir without repo url",
-			inputPath:         fileInRootPath,
-			mockRepoURL:       "",
-			mockRepoURLErr:    nil,
-			expectedRoot:      "",
-			expectedRepoURL:   "",
-			expectErr:         true,
-			expectedErrString: "no remote URL configured",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			repoURLFromDirFunc = func(_ string) (string, error) {
-				return tc.mockRepoURL, tc.mockRepoURLErr
-			}
-
-			url, root, err := findGitRoot(tc.inputPath)
+			root, err := findGitRoot(tc.inputPath)
 			if tc.expectErr {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedErrString)
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tc.expectedRepoURL, url)
 				assert.Equal(t, tc.expectedRoot, root)
 			}
 		})
@@ -186,6 +162,79 @@ func TestComputeRelativeInput(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedPath, relativeFolder)
+			}
+		})
+	}
+}
+
+func TestFindRepoURLWithOverride(t *testing.T) {
+	oldRepoURLFromDir := repoURLFromDirFunc
+	defer func() {
+		repoURLFromDirFunc = oldRepoURLFromDir
+	}()
+
+	testCases := []struct {
+		name              string
+		gitRoot           string
+		remoteRepoURLFlag string
+		expectErr         bool
+		expectedErrString string
+		mockRepoURL       string
+		mockRepoURLErr    error
+		expectedRepoURL   string
+	}{
+		{
+			name:              "no git root and no flag",
+			gitRoot:           "",
+			remoteRepoURLFlag: "",
+			expectErr:         true,
+			expectedErrString: "repository URL could not be determined",
+		},
+		{
+			name:            "git root, no flag",
+			gitRoot:         "proj/my-project-root",
+			mockRepoURL:     "https://github.com/snyk/my-repo.git",
+			expectedRepoURL: "https://github.com/snyk/my-repo.git",
+			expectErr:       false,
+		},
+		{
+			name:              "git root and flag - flag takes precedence",
+			mockRepoURL:       "https://github.com/snyk/my-repo.git",
+			remoteRepoURLFlag: "https://github.com/snyk/another-repo.git",
+			expectedRepoURL:   "https://github.com/snyk/another-repo.git",
+			expectErr:         false,
+		},
+		{
+			name:              "no git root, remote repo flag set",
+			gitRoot:           "",
+			remoteRepoURLFlag: "https://github.com/snyk/another-repo.git",
+			expectedRepoURL:   "https://github.com/snyk/another-repo.git",
+			expectErr:         false,
+		},
+		{
+			name:              "git root dir without repo url, no flag",
+			gitRoot:           "/some/git_folder",
+			mockRepoURL:       "",
+			mockRepoURLErr:    errors.New("remote not found"),
+			expectedRepoURL:   "",
+			expectErr:         true,
+			expectedErrString: "no remote repository URL configured ",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			repoURLFromDirFunc = func(_ string) (string, error) {
+				return tc.mockRepoURL, tc.mockRepoURLErr
+			}
+
+			repoURL, err := findRepoURLWithOverride(tc.gitRoot, tc.remoteRepoURLFlag)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrString)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedRepoURL, repoURL)
 			}
 		})
 	}

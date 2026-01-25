@@ -167,3 +167,6 @@ issues:
         - forcetypeassert
         - wrapcheck
         - nolintlint
+    - path: workflow.go
+      linters:
+        - goconst
