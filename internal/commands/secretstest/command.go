@@ -2,6 +2,7 @@ package secretstest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -148,6 +149,13 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 
 	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
 	if err != nil {
+		if errors.Is(err, upload.ErrNoFilesProvided) {
+			return "", c.ErrorFactory.CreateNoSupportedFilesFoundError()
+		}
+		if limitErr := (*upload.FileCountLimitError)(nil); errors.As(err, &limitErr) {
+			return "", c.ErrorFactory.CreateFileCountLimitExceededError(err)
+		}
+
 		return "", c.ErrorFactory.CreateRevisionError(err)
 	}
 	c.Logger.Info().Msg(fmt.Sprintf("Revision ID: %s", uploadRevision.RevisionID))

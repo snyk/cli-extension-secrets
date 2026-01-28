@@ -39,3 +39,13 @@ func (ef *ErrorFactory) CreateTestResourceError(err error) error {
 	ef.logger.Error().Err(err).Msg("error creating test resource")
 	return fmt.Errorf("error creating test resource: %w", err)
 }
+
+func (ef *ErrorFactory) CreateNoSupportedFilesFoundError() error {
+	ef.logger.Error().Msg("no supported files found")
+	return fmt.Errorf("no supported files found")
+}
+
+func (ef *ErrorFactory) CreateFileCountLimitExceededError(err error) error {
+	ef.logger.Error().Msg("file count limit exceeded")
+	return fmt.Errorf("file count limit exceeded: %w", err)
+}
