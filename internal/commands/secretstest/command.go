@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	FilterAndUploadFilesTimeout = 5 * time.Second
+	FilterAndUploadFilesTimeout = 30 * time.Second
 	LogFieldCount               = "count"
 )
 
