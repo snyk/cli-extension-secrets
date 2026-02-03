@@ -1,5 +1,4 @@
-//nolint:testpackage // whitebox testing to access _MaxFileSize
-package filefilter
+package filefilter_test
 
 import (
 	"os"
@@ -7,7 +6,11 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+
+	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
+
+const maxSizeThreshold = 50 * 1000 * 1000 // 50MB
 
 // createSizedFile creates a temporary file with a specific logical size.
 // It uses file truncation to create sparse files, meaning it sets the
@@ -34,9 +37,8 @@ func createSizedFile(t *testing.T, size int64) string {
 }
 
 func TestFileSizeFilter_FilterOut(t *testing.T) {
-	// Use a Nop logger to keep test output clean
 	logger := zerolog.Nop()
-	filter := FileSizeFilter(&logger)
+	filter := ff.FileSizeFilter(&logger)
 
 	testCases := []struct {
 		name        string
@@ -47,7 +49,6 @@ func TestFileSizeFilter_FilterOut(t *testing.T) {
 		{
 			name: "Empty file",
 			size: 0,
-			// Filter out empty files
 			want: true,
 		},
 		{
@@ -62,24 +63,22 @@ func TestFileSizeFilter_FilterOut(t *testing.T) {
 		},
 		{
 			name: "File just under max size",
-			size: _MaxFileSize - 1,
+			size: maxSizeThreshold - 1,
 			want: false,
 		},
 		{
 			name: "File exactly at max size",
-			size: _MaxFileSize,
+			size: maxSizeThreshold,
 			want: false,
 		},
 		{
 			name: "File just over max size",
-			size: _MaxFileSize + 1,
-			// Too big.
+			size: maxSizeThreshold + 1,
 			want: true,
 		},
 		{
 			name: "Very large file (10x max)",
-			size: _MaxFileSize * 10,
-			// Too big.
+			size: maxSizeThreshold * 10,
 			want: true,
 		},
 		{
