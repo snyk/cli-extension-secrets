@@ -117,8 +117,7 @@ func SecretsWorkflow(
 	logger.Info().Str("inputPath", inputPath).Msg("Running secrets workflow...")
 	output, err := c.RunWorkflow(ctx, inputPath)
 	if err != nil {
-		logger.Error().Err(err).Msg("workflow execution failed")
-		return nil, cli_errors.NewGeneralSecretsFailureError("workflow execution failed")
+		return nil, err
 	}
 
 	return output, nil

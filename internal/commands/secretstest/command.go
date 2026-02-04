@@ -103,19 +103,19 @@ func (c *Command) RunWorkflow(
 
 	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPath)
 	if err != nil {
-		return nil, err
+		return nil, c.ErrorFactory.CreateGeneralSecretsFailureError(err)
 	}
 
 	c.UserInterface.SetTitle(TitleScanning)
 	testResult, err := c.triggerScan(ctx, uploadRevision)
 	if err != nil {
-		return nil, err
+		return nil, c.ErrorFactory.CreateGeneralSecretsFailureError(err)
 	}
 
 	c.UserInterface.SetTitle(TitleRetrievingResults)
 	output, err := prepareOutput(ctx, testResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare output: %w", err)
+		return nil, c.ErrorFactory.CreatePrepareOutputError(err)
 	}
 
 	return output, err
@@ -148,7 +148,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 
 	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
 	if err != nil {
-		return "", c.ErrorFactory.CreateRevisionError(err)
+		return "", c.ErrorFactory.CreateUploadError(err)
 	}
 	c.Logger.Info().Msg(fmt.Sprintf("Revision ID: %s", uploadRevision.RevisionID))
 
