@@ -147,7 +147,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		dir = filepath.Dir(inputPath)
 	}
 
-	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
+	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, filepath.ToSlash(dir))
 	if err != nil {
 		return "", c.ErrorFactory.NewUploadError(err)
 	}

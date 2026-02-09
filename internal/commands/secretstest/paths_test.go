@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFindGitRoot(t *testing.T) {
@@ -165,6 +166,19 @@ func TestComputeRelativeInput(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestComputeRelativeInput_NormalizesToUnixPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	root := filepath.Join(tempDir, "repo")
+	sub := filepath.Join(root, "src", "deep", "dir")
+	err := os.MkdirAll(sub, 0o755)
+	require.NoError(t, err)
+
+	result, err := computeRelativeInput(sub, root)
+	require.NoError(t, err)
+	assert.Equal(t, "src/deep/dir", result)
+	assert.NotContains(t, result, "\\")
 }
 
 func TestFindRepoURLWithOverride(t *testing.T) {
