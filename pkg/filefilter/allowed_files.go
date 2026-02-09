@@ -2,7 +2,6 @@ package filefilter
 
 import (
 	"context"
-	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -56,7 +55,7 @@ func streamAllowedFiles(
 
 			for file := range pathFileStream {
 				select {
-				case mergedFiles <- filepath.ToSlash(file):
+				case mergedFiles <- file:
 				case <-ctx.Done():
 					return
 				}

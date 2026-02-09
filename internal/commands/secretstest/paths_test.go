@@ -178,7 +178,7 @@ func TestComputeRelativeInput_NormalizesToUnixPaths(t *testing.T) {
 	result, err := computeRelativeInput(sub, root)
 	require.NoError(t, err)
 	assert.Equal(t, "src/deep/dir", result)
-	assert.NotContains(t, result, "\\")
+	assert.NotContains(t, result, `\`)
 }
 
 func TestFindRepoURLWithOverride(t *testing.T) {

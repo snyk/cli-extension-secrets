@@ -46,9 +46,9 @@ func collectStream(ch chan string, root string) []string {
 			results = append(results, path)
 			continue
 		}
-		// Convert absolute path back to relative for assertion
+		// Convert absolute path back to relative for assertion.
 		rel, _ := filepath.Rel(root, path)
-		results = append(results, rel)
+		results = append(results, filepath.ToSlash(rel))
 	}
 	sort.Strings(results)
 	return results
@@ -263,37 +263,6 @@ func TestStreamAllowedFiles(t *testing.T) {
 			t.Fatal("stream did not close after context cancellation")
 		}
 	})
-}
-
-func TestStreamAllowedFiles_NormalizesToUnixPaths(t *testing.T) {
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
-
-	files := map[string]string{
-		"src/deep/dir/file.go": "package main",
-		"src/other/util.go":    "package other",
-	}
-	rootDir := setupTempDir(t, files)
-
-	ctx := context.Background()
-	stream := streamAllowedFiles(ctx, []string{rootDir}, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
-
-	count := 0
-	for path := range stream {
-		count++
-		if filepath.Base(path) == filepath.Base(rootDir) {
-			continue
-		}
-		// Assert no backslashes in any output path
-		for _, ch := range path {
-			if ch == '\\' {
-				t.Errorf("path should use forward slashes, got: %s", path)
-				break
-			}
-		}
-	}
-	if count == 0 {
-		t.Fatal("expected at least one file from stream")
-	}
 }
 
 func TestStreamAllowedFiles_Timeout(t *testing.T) {
