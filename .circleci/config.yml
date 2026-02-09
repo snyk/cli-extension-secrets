@@ -3,6 +3,7 @@ version: 2.1
 orbs:
   go: circleci/go@1.7.1
   prodsec: snyk/prodsec-orb@1
+  win: circleci/windows@5.0
 
 base_image: &base_image
   resource_class: small
@@ -15,6 +16,18 @@ jobs:
     steps:
       - checkout
       - run: go test ./...
+  windows-test:
+    executor:
+      name: win/server-2022
+      version: current
+    steps:
+      - run:
+          name: Configure git line endings
+          command: git config --global core.autocrlf input
+      - checkout
+      - run:
+          name: Run tests
+          command: go test ./...
   lint:
     <<: *base_image
     steps:
@@ -44,5 +57,7 @@ workflows:
             - analysis-iac
       - unit-test:
           name: Unit Test
+      - windows-test:
+          name: Windows Path Tests
       - lint:
           name: Linting

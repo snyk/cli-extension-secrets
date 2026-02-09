@@ -43,12 +43,12 @@ func collectStream(ch chan string, root string) []string {
 	for path := range ch {
 		// If root is ".", path is already relative.
 		if root == "." {
-			results = append(results, path)
+			results = append(results, filepath.ToSlash(path))
 			continue
 		}
-		// Convert absolute path back to relative for assertion
+		// Convert absolute path back to relative for assertion.
 		rel, _ := filepath.Rel(root, path)
-		results = append(results, rel)
+		results = append(results, filepath.ToSlash(rel))
 	}
 	sort.Strings(results)
 	return results
