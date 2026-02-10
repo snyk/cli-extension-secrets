@@ -7,7 +7,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -24,9 +23,8 @@ func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	assert.Error(t, err)
-	//nolint:errorlint // we want to check the snyk_error detail.
-	assert.Contains(t, err.(snyk_errors.Error).Detail, "User not allowed to run without feature flag.")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "User not allowed to run without feature flag.")
 }
 
 func TestSecretsWorkflow_UnsupportedFlag(t *testing.T) {
@@ -39,9 +37,8 @@ func TestSecretsWorkflow_UnsupportedFlag(t *testing.T) {
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	assert.Error(t, err)
-	//nolint:errorlint // we want to check the snyk_error detail.
-	assert.Contains(t, err.(snyk_errors.Error).Detail, "Flag --report is not yet supported.")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "Flag --report is not yet supported.")
 }
 
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
@@ -54,9 +51,8 @@ func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	assert.Error(t, err)
-	//nolint:errorlint // we want to check the snyk_error detail.
-	assert.Contains(t, err.(snyk_errors.Error).Detail, "No org provided.")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "No org provided.")
 }
 
 func TestSecretsWorkflow_TooManyInputPaths(t *testing.T) {
@@ -70,9 +66,8 @@ func TestSecretsWorkflow_TooManyInputPaths(t *testing.T) {
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	assert.Error(t, err)
-	//nolint:errorlint // we want to check the snyk_error detail.
-	assert.Contains(t, err.(snyk_errors.Error).Detail, "Only one input path is accepted.")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "Only one input path is accepted.")
 }
 
 func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
@@ -86,9 +81,8 @@ func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	assert.Error(t, err)
-	//nolint:errorlint // we want to check the snyk_error detail.
-	assert.Contains(t, err.(snyk_errors.Error).Detail, "invalid-value")
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "invalid-value")
 }
 
 func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {

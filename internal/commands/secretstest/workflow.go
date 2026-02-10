@@ -5,11 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/snyk/error-catalog-golang-public/snyk_errors"
-
 	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 
-	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -44,38 +41,39 @@ func SecretsWorkflow(
 
 	config := ictx.GetConfiguration()
 	logger := ictx.GetEnhancedLogger()
+	errorFactory := NewErrorFactory(logger)
 
 	u := NewUI(ictx)
 	u.SetTitle(TitleValidating)
 	defer u.Clear()
 
 	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return nil, cli_errors.NewFeatureNotEnabledError("User not allowed to run without feature flag.")
+		return nil, errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
 	if config.IsSet(FlagReport) {
-		return nil, cli_errors.NewFeatureUnderDevelopmentError("Flag --report is not yet supported.")
+		return nil, errorFactory.NewFeatureUnderDevelopmentError(ReportNotSupportedMsg)
 	}
 
 	orgID := config.GetString(configuration.ORGANIZATION)
 	if orgID == "" {
-		return nil, cli_errors.NewValidationFailureError("No org provided.")
+		return nil, errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
 	}
 
 	err := validateFlagsConfig(config)
 	if err != nil {
-		return nil, cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
+		return nil, errorFactory.NewValidationFailureError(err.Error())
 	}
 
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
 	if len(inputPaths) != 1 {
-		return nil, cli_errors.NewValidationFailureError("Only one input path is accepted.")
+		return nil, errorFactory.NewValidationFailureError(SingleInputPathMsg)
 	}
 
 	inputPath, err := filepath.Abs(inputPaths[0])
 	if err != nil {
-		logger.Error().Err(err).Msg("could not get absolute path for: " + inputPaths[0])
-		return nil, cli_errors.NewGeneralSecretsFailureError("Unable to get absolute path")
+		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], err)
+		return nil, errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
 	}
 
 	gitRootDir, err := findGitRoot(inputPath)
@@ -96,7 +94,7 @@ func SecretsWorkflow(
 
 	excludeGlobs, err := parseExcludeFlag(config)
 	if err != nil {
-		return nil, cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
+		return nil, errorFactory.NewInvalidFlagError(err)
 	}
 
 	args := &CommandArgs{
@@ -107,18 +105,17 @@ func SecretsWorkflow(
 		RepoURL:           repoURL,
 		GetClients:        NewWorkflowClients,
 		Excludes:          excludeGlobs,
+		ErrorFactory:      errorFactory,
 	}
 	c, err := NewCommand(args)
 	if err != nil {
-		logger.Error().Err(err).Msg("could not initialize command")
-		return nil, cli_errors.NewGeneralSecretsFailureError(UnableToInitializeError)
+		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnableToInitializeMsg)
 	}
 
 	logger.Info().Str("inputPath", inputPath).Msg("Running secrets workflow...")
 	output, err := c.RunWorkflow(ctx, inputPath)
 	if err != nil {
-		logger.Error().Err(err).Msg("workflow execution failed")
-		return nil, cli_errors.NewGeneralSecretsFailureError("workflow execution failed")
+		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnexpectedErrorMsg)
 	}
 
 	return output, nil
