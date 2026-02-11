@@ -3,7 +3,6 @@ package secretstest
 
 import (
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"io"
 	"mime"
@@ -28,8 +27,8 @@ import (
 // flags which ones contain backslashes, so CI output on Windows reveals exactly
 // what needs fixing.
 //
-// Category A: upload file paths (multipart field names from GAF upload client)
-// Category B: RootFolderID (from computeRelativeInput + createTestResource)
+// Category A: upload file paths (multipart field names from GAF upload client).
+// Category B: RootFolderID (from computeRelativeInput + createTestResource).
 func TestObservePathsSentToBackend(t *testing.T) {
 	// ── Setup: temp directory with nested files ──────────────────────────
 	tmpDir := t.TempDir()
@@ -42,7 +41,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 		filepath.Join(nestedDir, "helper.go"),
 	}
 	for _, f := range filesToCreate {
-		require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0o644))
+		require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0o600))
 	}
 
 	// ── Track intercepted paths ──────────────────────────────────────────
@@ -108,7 +107,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	}
 	close(pathsChan)
 
-	result, err := uploadClient.CreateRevisionFromChan(context.Background(), pathsChan, tmpDir)
+	result, err := uploadClient.CreateRevisionFromChan(t.Context(), pathsChan, tmpDir)
 	require.NoError(t, err)
 
 	// ── Category B: RootFolderID ─────────────────────────────────────────
