@@ -292,50 +292,54 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	_, err = cmd.RunWorkflow(ctx, tmpDir)
 	require.NoError(t, err)
 
-	// ── Report ───────────────────────────────────────────────────────────
+	// ── Report (printed to stdout to avoid t.Log line-number prefixes) ──
 
-	t.Log("")
-	t.Log("═══════════════════════════════════════════════════")
-	t.Log("  PATHS SENT TO BACKEND — full E2E observation")
-	t.Log("═══════════════════════════════════════════════════")
+	report := func(format string, args ...any) {
+		fmt.Fprintf(os.Stdout, format+"\n", args...)
+	}
 
-	t.Log("")
-	t.Log("── All intercepted HTTP requests ──")
+	report("")
+	report("═══════════════════════════════════════════════════")
+	report("  PATHS SENT TO BACKEND — full E2E observation")
+	report("═══════════════════════════════════════════════════")
+
+	report("")
+	report("── All intercepted HTTP requests ──")
 	for i, req := range allRequests {
-		t.Logf("  [%d] %s %s", i+1, req.Method, req.URL)
+		report("  [%d] %s %s", i+1, req.Method, req.URL)
 		if req.Body != "" {
 			// Pretty-print JSON bodies; leave non-JSON as-is.
 			var parsed any
 			if err := json.Unmarshal([]byte(req.Body), &parsed); err == nil {
 				pretty, _ := json.MarshalIndent(parsed, "       ", "  ")
-				t.Logf("       body: %s", string(pretty))
+				report("       body: %s", string(pretty))
 			} else {
-				t.Logf("       body: %s", req.Body)
+				report("       body: %s", req.Body)
 			}
 			if strings.Contains(req.Body, `\`) {
-				t.Logf("       *** BACKSLASH in request body ***")
+				report("       *** BACKSLASH in request body ***")
 			}
 		}
 	}
 
-	t.Log("")
-	t.Log("── Category A: Upload file paths (multipart field names) ──")
+	report("")
+	report("── Category A: Upload file paths (multipart field names) ──")
 	for _, p := range capturedUploadPaths {
 		flag := ""
 		if strings.Contains(p, `\`) {
 			flag = " *** BACKSLASH ***"
 		}
-		t.Logf("  %q%s", p, flag)
+		report("  %q%s", p, flag)
 	}
 
-	t.Log("")
-	t.Logf("── Category B: computeRelativeInput result: %q ──", rootFolderID)
+	report("")
+	report("── Category B: computeRelativeInput result: %q ──", rootFolderID)
 	if strings.Contains(rootFolderID, `\`) {
-		t.Log("  *** BACKSLASH in RootFolderID ***")
+		report("  *** BACKSLASH in RootFolderID ***")
 	}
 
-	t.Log("")
-	t.Log("═══════════════════════════════════════════════════")
+	report("")
+	report("═══════════════════════════════════════════════════")
 }
 
 // collectMultipartFieldNames decompresses the gzip body, parses the multipart
