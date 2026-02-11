@@ -136,7 +136,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 		}
 		t.Logf("  %q%s", p, flag)
 	}
-	t.Logf("  uploaded: %d  filtered: %d", result.UploadedFilesCount, len(result.FilteredFiles))
+	t.Logf("  uploaded: %d  skipped: %d", result.UploadedFilesCount, len(result.SkippedFiles))
 
 	t.Log("")
 	t.Log("── Category B: RootFolderID ──")
