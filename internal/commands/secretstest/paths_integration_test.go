@@ -60,20 +60,45 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	fakeTestID := uuid.New()
 
 	// ── Captured data ────────────────────────────────────────────────────
+	type capturedRequest struct {
+		Method string
+		URL    string
+		Body   string // empty for gzip/multipart; those are parsed separately
+	}
+
 	var mu sync.Mutex
 	var capturedUploadPaths []string
-	var capturedTestBody string
-	var requestLog []string
+	var allRequests []capturedRequest
 
-	logRequest := func(method, path string) {
+	captureRequest := func(method, rawURL, body string) {
 		mu.Lock()
-		requestLog = append(requestLog, fmt.Sprintf("%s %s", method, path))
+		allRequests = append(allRequests, capturedRequest{Method: method, URL: rawURL, Body: body})
 		mu.Unlock()
+	}
+
+	// readBody returns the request body as a string. For gzip-encoded
+	// requests (file uploads) it returns a placeholder — those are parsed
+	// separately by collectMultipartFieldNames.
+	readBody := func(r *http.Request) string {
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			return "<gzip+multipart — parsed separately>"
+		}
+		if r.Body == nil {
+			return ""
+		}
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			return fmt.Sprintf("<read error: %v>", err)
+		}
+		// Replace the body so downstream handlers can still read it.
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+		return string(body)
 	}
 
 	// ── httptest server: 7 endpoints ─────────────────────────────────────
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logRequest(r.Method, r.URL.Path)
+		body := readBody(r)
+		captureRequest(r.Method, r.URL.String(), body)
 
 		switch {
 		// ── Upload API ───────────────────────────────────────────────────
@@ -115,13 +140,8 @@ func TestObservePathsSentToBackend(t *testing.T) {
 
 		// ── Test API ─────────────────────────────────────────────────────
 
-		// POST /orgs/{orgID}/tests → start test (capture body).
+		// POST /orgs/{orgID}/tests → start test.
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tests"):
-			body, _ := io.ReadAll(r.Body)
-			mu.Lock()
-			capturedTestBody = string(body)
-			mu.Unlock()
-
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusAccepted)
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -205,7 +225,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 			})
 
 		default:
-			t.Logf("UNHANDLED REQUEST: %s %s", r.Method, r.URL.Path)
+			t.Errorf("UNHANDLED REQUEST: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
@@ -280,9 +300,22 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	t.Log("═══════════════════════════════════════════════════")
 
 	t.Log("")
-	t.Log("── HTTP request log (proves all traffic intercepted) ──")
-	for _, entry := range requestLog {
-		t.Logf("  %s", entry)
+	t.Log("── All intercepted HTTP requests ──")
+	for i, req := range allRequests {
+		t.Logf("  [%d] %s %s", i+1, req.Method, req.URL)
+		if req.Body != "" {
+			// Pretty-print JSON bodies; leave non-JSON as-is.
+			var parsed any
+			if err := json.Unmarshal([]byte(req.Body), &parsed); err == nil {
+				pretty, _ := json.MarshalIndent(parsed, "       ", "  ")
+				t.Logf("       body: %s", string(pretty))
+			} else {
+				t.Logf("       body: %s", req.Body)
+			}
+			if strings.Contains(req.Body, `\`) {
+				t.Logf("       *** BACKSLASH in request body ***")
+			}
+		}
 	}
 
 	t.Log("")
@@ -296,23 +329,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	}
 
 	t.Log("")
-	t.Log("── Category B: POST /tests body (root_folder_id) ──")
-	if capturedTestBody != "" {
-		// Pretty-print and extract root_folder_id.
-		var parsed map[string]any
-		if err := json.Unmarshal([]byte(capturedTestBody), &parsed); err == nil {
-			pretty, _ := json.MarshalIndent(parsed, "  ", "  ")
-			t.Logf("  full body:\n  %s", string(pretty))
-		}
-		if strings.Contains(capturedTestBody, `\\`) || strings.Contains(capturedTestBody, `\`) {
-			t.Log("  *** POST /tests body contains backslash(es) ***")
-		}
-	} else {
-		t.Log("  WARNING: POST /tests body was not captured")
-	}
-
-	t.Log("")
-	t.Logf("  computeRelativeInput result: %q", rootFolderID)
+	t.Logf("── Category B: computeRelativeInput result: %q ──", rootFolderID)
 	if strings.Contains(rootFolderID, `\`) {
 		t.Log("  *** BACKSLASH in RootFolderID ***")
 	}
