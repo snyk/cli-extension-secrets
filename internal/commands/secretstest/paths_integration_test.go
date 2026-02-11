@@ -67,7 +67,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	}
 
 	var mu sync.Mutex
-	var capturedUploadPaths []string
+	var capturedUploads []uploadedFile
 	var allRequests []capturedRequest
 
 	captureRequest := func(method, rawURL, body string) {
@@ -120,7 +120,7 @@ func TestObservePathsSentToBackend(t *testing.T) {
 
 		// POST .../upload_revisions/{id}/files → upload files (gzip+multipart).
 		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/files"):
-			collectMultipartFieldNames(t, r, &mu, &capturedUploadPaths)
+			collectMultipartFiles(t, r, &mu, &capturedUploads)
 			w.WriteHeader(http.StatusNoContent)
 
 		// PATCH .../upload_revisions/{id} → seal revision.
@@ -323,14 +323,23 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	}
 
 	report("")
-	report("── Category A: Upload file paths (multipart field names) ──")
-	for _, p := range capturedUploadPaths {
+	report("── Category A: Uploaded files (path + content verification) ──")
+	for _, uf := range capturedUploads {
 		flag := ""
-		if strings.Contains(p, `\`) {
+		if strings.Contains(uf.Path, `\`) {
 			flag = " *** BACKSLASH ***"
 		}
-		report("  %q%s", p, flag)
+		// Verify content matches what was written to disk.
+		expectedContent := "package main\n"
+		contentOK := uf.Content == expectedContent
+		status := "OK"
+		if !contentOK {
+			status = fmt.Sprintf("MISMATCH (got %q, want %q)", uf.Content, expectedContent)
+		}
+		report("  path: %q%s  content: %s", uf.Path, flag, status)
+		require.Truef(t, contentOK, "uploaded content mismatch for %q", uf.Path)
 	}
+	require.NotEmpty(t, capturedUploads, "no files were uploaded")
 
 	report("")
 	report("── Category B: computeRelativeInput result: %q ──", rootFolderID)
@@ -342,9 +351,14 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	report("═══════════════════════════════════════════════════")
 }
 
-// collectMultipartFieldNames decompresses the gzip body, parses the multipart
-// form, and appends every field name (= relative file path) to dst.
-func collectMultipartFieldNames(t *testing.T, r *http.Request, mu *sync.Mutex, dst *[]string) {
+type uploadedFile struct {
+	Path    string
+	Content string
+}
+
+// collectMultipartFiles decompresses the gzip body, parses the multipart
+// form, and appends every field name (= relative file path) and file content to dst.
+func collectMultipartFiles(t *testing.T, r *http.Request, mu *sync.Mutex, dst *[]uploadedFile) {
 	t.Helper()
 
 	gzReader, err := gzip.NewReader(r.Body)
@@ -372,12 +386,11 @@ func collectMultipartFieldNames(t *testing.T, r *http.Request, mu *sync.Mutex, d
 			break
 		}
 		fieldName := part.FormName()
-		// Drain the part so the reader can advance.
-		_, _ = io.Copy(io.Discard, part)
+		content, _ := io.ReadAll(part)
 		part.Close()
 
 		mu.Lock()
-		*dst = append(*dst, fieldName)
+		*dst = append(*dst, uploadedFile{Path: fieldName, Content: string(content)})
 		mu.Unlock()
 	}
 }
