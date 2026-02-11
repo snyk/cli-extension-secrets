@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   go: circleci/go@1.7.1
+  win: circleci/windows@5.0
   prodsec: snyk/prodsec-orb@1
 
 base_image: &base_image
@@ -20,6 +21,19 @@ jobs:
     steps:
       - checkout
       - run: golangci-lint run ./...
+
+  windows-test:
+    executor:
+      name: win/server-2022
+      version: current
+    steps:
+      - run:
+          name: Configure git line endings
+          command: git config --global core.autocrlf input
+      - checkout
+      - run:
+          name: Run tests
+          command: go test -v -run TestObservePathsSentToBackend ./internal/commands/secretstest/
 
   security-scans:
     <<: *base_image
@@ -46,3 +60,5 @@ workflows:
           name: Unit Test
       - lint:
           name: Linting
+      - windows-test:
+          name: Windows Test
