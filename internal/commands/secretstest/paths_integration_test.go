@@ -1,36 +1,45 @@
-//nolint:testpackage // whitebox testing: access unexported computeRelativeInput and createTestResource
+//nolint:testpackage // whitebox testing: access unexported functions and types
 package secretstest
 
 import (
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
+	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/stretchr/testify/require"
+
+	"github.com/snyk/cli-extension-secrets/internal/clients/testshim"
+	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
+	mock_secretstest "github.com/snyk/cli-extension-secrets/internal/commands/secretstest/testdata/mocks"
 )
 
-// TestObservePathsSentToBackend is an observation test that intercepts all
-// path-like values that the extension would send to the backend.
-//
-// It does NOT assert or fail on backslashes. Instead it logs every path and
-// flags which ones contain backslashes, so CI output on Windows reveals exactly
-// what needs fixing.
+// TestObservePathsSentToBackend runs Command.RunWorkflow end-to-end with every
+// HTTP call routed through an httptest server. It captures and logs all
+// path-like values that would reach the real Snyk backend.
 //
 // Category A: upload file paths (multipart field names from GAF upload client).
-// Category B: RootFolderID (from computeRelativeInput + createTestResource).
+// Category B: root_folder_id from the POST /tests JSON body.
+// Bonus: full HTTP request log proving all traffic was intercepted.
 func TestObservePathsSentToBackend(t *testing.T) {
-	// ── Setup: temp directory with nested files ──────────────────────────
+	// ── Setup: temp directory with nested text files ─────────────────────
 	tmpDir := t.TempDir()
 	nestedDir := filepath.Join(tmpDir, "src", "subdir")
 	require.NoError(t, os.MkdirAll(nestedDir, 0o755))
@@ -44,15 +53,32 @@ func TestObservePathsSentToBackend(t *testing.T) {
 		require.NoError(t, os.WriteFile(f, []byte("package main\n"), 0o600))
 	}
 
-	// ── Track intercepted paths ──────────────────────────────────────────
+	// ── IDs ──────────────────────────────────────────────────────────────
+	orgID := uuid.New()
+	fakeRevisionID := uuid.New()
+	fakeJobID := uuid.New()
+	fakeTestID := uuid.New()
+
+	// ── Captured data ────────────────────────────────────────────────────
 	var mu sync.Mutex
 	var capturedUploadPaths []string
-	fakeRevisionID := uuid.New()
+	var capturedTestBody string
+	var requestLog []string
 
-	// ── httptest server mimicking the Snyk upload API ────────────────────
+	logRequest := func(method, path string) {
+		mu.Lock()
+		requestLog = append(requestLog, fmt.Sprintf("%s %s", method, path))
+		mu.Unlock()
+	}
+
+	// ── httptest server: 7 endpoints ─────────────────────────────────────
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logRequest(r.Method, r.URL.Path)
+
 		switch {
-		// POST /hidden/orgs/{orgID}/upload_revisions → create revision
+		// ── Upload API ───────────────────────────────────────────────────
+
+		// POST /hidden/orgs/{orgID}/upload_revisions → create revision.
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/upload_revisions"):
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusCreated)
@@ -67,12 +93,12 @@ func TestObservePathsSentToBackend(t *testing.T) {
 				},
 			})
 
-		// POST .../upload_revisions/{id}/files → upload files (gzip + multipart)
+		// POST .../upload_revisions/{id}/files → upload files (gzip+multipart).
 		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/files"):
 			collectMultipartFieldNames(t, r, &mu, &capturedUploadPaths)
 			w.WriteHeader(http.StatusNoContent)
 
-		// PATCH .../upload_revisions/{id} → seal revision
+		// PATCH .../upload_revisions/{id} → seal revision.
 		case r.Method == http.MethodPatch && strings.Contains(r.URL.Path, "/upload_revisions/"):
 			w.Header().Set("Content-Type", "application/vnd.api+json")
 			w.WriteHeader(http.StatusOK)
@@ -87,6 +113,97 @@ func TestObservePathsSentToBackend(t *testing.T) {
 				},
 			})
 
+		// ── Test API ─────────────────────────────────────────────────────
+
+		// POST /orgs/{orgID}/tests → start test (capture body).
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/tests"):
+			body, _ := io.ReadAll(r.Body)
+			mu.Lock()
+			capturedTestBody = string(body)
+			mu.Unlock()
+
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"id":   fakeJobID.String(),
+					"type": "test_jobs",
+					"attributes": map[string]any{
+						"status":     "pending",
+						"created_at": time.Now().Format(time.RFC3339),
+					},
+				},
+				"jsonapi": map[string]any{"version": "1.0"},
+				"links":   map[string]any{},
+			})
+
+		// GET /orgs/{orgID}/test_jobs/{jobID} → 303 redirect to test result.
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/test_jobs/"):
+			resultPath := fmt.Sprintf("/orgs/%s/tests/%s", orgID, fakeTestID)
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			relatedLink := fmt.Sprintf("%s://%s%s", scheme, r.Host, resultPath)
+
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.Header().Set("Location", relatedLink)
+			w.WriteHeader(http.StatusSeeOther)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"id":   fakeJobID.String(),
+					"type": "test_jobs",
+					"attributes": map[string]any{
+						"status":     "finished",
+						"created_at": time.Now().Format(time.RFC3339),
+					},
+					"relationships": map[string]any{
+						"test": map[string]any{
+							"data": map[string]any{
+								"id":   fakeTestID.String(),
+								"type": "tests",
+							},
+						},
+					},
+				},
+				"jsonapi": map[string]any{"version": "1.0"},
+				"links":   map[string]any{},
+			})
+
+		// GET /orgs/{orgID}/tests/{testID} → test result (finished, pass).
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/tests/") &&
+			!strings.Contains(r.URL.Path, "/findings") &&
+			!strings.Contains(r.URL.Path, "/test_jobs/"):
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"id":   fakeTestID.String(),
+					"type": "tests",
+					"attributes": map[string]any{
+						"created_at": time.Now().Format(time.RFC3339),
+						"state": map[string]any{
+							"execution": "finished",
+						},
+						"outcome": map[string]any{
+							"result": "pass",
+						},
+					},
+				},
+				"jsonapi": map[string]any{"version": "1.0"},
+				"links":   map[string]any{},
+			})
+
+		// GET /orgs/{orgID}/tests/{testID}/findings → empty findings.
+		case r.Method == http.MethodGet && strings.Contains(r.URL.Path, "/findings"):
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data":    []any{},
+				"jsonapi": map[string]any{"version": "1.0"},
+				"links":   map[string]any{},
+			})
+
 		default:
 			t.Logf("UNHANDLED REQUEST: %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(http.StatusNotFound)
@@ -96,36 +213,77 @@ func TestObservePathsSentToBackend(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	defer srv.Close()
 
-	// ── Category A: Upload file paths via real GAF upload client ─────────
-	orgID := uuid.New()
-	cfg := fileupload.Config{BaseURL: srv.URL, OrgID: orgID}
-	uploadClient := fileupload.NewClient(srv.Client(), cfg)
+	// ── Wire real clients ────────────────────────────────────────────────
 
-	pathsChan := make(chan string, len(filesToCreate))
-	for _, f := range filesToCreate {
-		pathsChan <- f
+	// Upload client: real GAF fileupload.Client → httptest.
+	uploadClient := fileupload.NewClient(
+		srv.Client(),
+		fileupload.Config{BaseURL: srv.URL, OrgID: orgID},
+	)
+
+	// Test API client: real testapi.TestClient → httptest.
+	// Needs a non-redirecting HTTP client (mirrors snykclient behavior).
+	noRedirectClient := &http.Client{
+		Transport: srv.Client().Transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
-	close(pathsChan)
-
-	result, err := uploadClient.CreateRevisionFromChan(t.Context(), pathsChan, tmpDir)
-	require.NoError(t, err)
-
-	// ── Category B: RootFolderID ─────────────────────────────────────────
-	rootFolderID, err := computeRelativeInput(nestedDir, tmpDir)
-	require.NoError(t, err)
-
-	testResource, err := createTestResource(
-		fakeRevisionID.String(),
-		"https://github.com/example/repo",
-		rootFolderID,
+	testClient, err := testapi.NewTestClient(
+		srv.URL,
+		testapi.WithPollInterval(10*time.Millisecond),
+		testapi.WithPollTimeout(5*time.Second),
+		testapi.WithCustomHTTPClient(noRedirectClient),
+		testapi.WithJitterFunc(func(d time.Duration) time.Duration { return d }),
 	)
 	require.NoError(t, err)
 
+	// ── Build Command ────────────────────────────────────────────────────
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockUI := mock_secretstest.NewMockUserInterface(ctrl)
+	mockUI.EXPECT().SetTitle(gomock.Any()).AnyTimes()
+
+	logger := zerolog.Nop()
+	rootFolderID, err := computeRelativeInput(nestedDir, tmpDir)
+	require.NoError(t, err)
+
+	cmd := &Command{
+		Logger:       &logger,
+		OrgID:        orgID.String(),
+		RootFolderID: rootFolderID,
+		RepoURL:      "https://github.com/example/repo",
+		Clients: &WorkflowClients{
+			FileUpload:  uploadClient,
+			TestAPIShim: &testshim.TestAPIClient{TestClient: testClient},
+		},
+		ErrorFactory:  NewErrorFactory(&logger),
+		UserInterface: mockUI,
+	}
+
+	// ── Run the full workflow ────────────────────────────────────────────
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{}).AnyTimes()
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+
+	_, err = cmd.RunWorkflow(ctx, tmpDir)
+	require.NoError(t, err)
+
 	// ── Report ───────────────────────────────────────────────────────────
+
 	t.Log("")
 	t.Log("═══════════════════════════════════════════════════")
-	t.Log("  PATHS SENT TO BACKEND — observation report")
+	t.Log("  PATHS SENT TO BACKEND — full E2E observation")
 	t.Log("═══════════════════════════════════════════════════")
+
+	t.Log("")
+	t.Log("── HTTP request log (proves all traffic intercepted) ──")
+	for _, entry := range requestLog {
+		t.Logf("  %s", entry)
+	}
 
 	t.Log("")
 	t.Log("── Category A: Upload file paths (multipart field names) ──")
@@ -136,20 +294,27 @@ func TestObservePathsSentToBackend(t *testing.T) {
 		}
 		t.Logf("  %q%s", p, flag)
 	}
-	t.Logf("  uploaded: %d  skipped: %d", result.UploadedFilesCount, len(result.SkippedFiles))
 
 	t.Log("")
-	t.Log("── Category B: RootFolderID ──")
-	flagB := ""
-	if strings.Contains(rootFolderID, `\`) {
-		flagB = " *** BACKSLASH ***"
+	t.Log("── Category B: POST /tests body (root_folder_id) ──")
+	if capturedTestBody != "" {
+		// Pretty-print and extract root_folder_id.
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(capturedTestBody), &parsed); err == nil {
+			pretty, _ := json.MarshalIndent(parsed, "  ", "  ")
+			t.Logf("  full body:\n  %s", string(pretty))
+		}
+		if strings.Contains(capturedTestBody, `\\`) || strings.Contains(capturedTestBody, `\`) {
+			t.Log("  *** POST /tests body contains backslash(es) ***")
+		}
+	} else {
+		t.Log("  WARNING: POST /tests body was not captured")
 	}
-	t.Logf("  computeRelativeInput: %q%s", rootFolderID, flagB)
 
-	resourceJSON, _ := json.MarshalIndent(testResource, "  ", "  ")
-	t.Logf("  test resource payload:\n  %s", string(resourceJSON))
-	if strings.Contains(string(resourceJSON), `\`) {
-		t.Log("  *** test resource JSON contains backslash(es) ***")
+	t.Log("")
+	t.Logf("  computeRelativeInput result: %q", rootFolderID)
+	if strings.Contains(rootFolderID, `\`) {
+		t.Log("  *** BACKSLASH in RootFolderID ***")
 	}
 
 	t.Log("")
