@@ -78,7 +78,9 @@ func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath st
 		}
 	}
 
-	return relativeInputPath, nil
+	// Normalize to forward slashes so Windows paths (e.g. "src\subdir")
+	// are sent to the backend as Unix-style paths ("src/subdir").
+	return filepath.ToSlash(relativeInputPath), nil
 }
 
 func isFile(path string) (bool, error) {
