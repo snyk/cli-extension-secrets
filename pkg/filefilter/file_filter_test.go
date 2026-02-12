@@ -4,7 +4,6 @@ package filefilter
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -66,8 +65,8 @@ func TestFilter_Logic(t *testing.T) {
 
 	// Drops vendor folder
 	vendorFilter := &mockFilter{
-		fn: func(path string) bool {
-			return strings.Contains(path, "drop_vendor/lib.js")
+		fn: func(p string) bool {
+			return strings.Contains(p, filepath.Join("drop_vendor", "lib.js"))
 		},
 	}
 
@@ -89,7 +88,7 @@ func TestFilter_Logic(t *testing.T) {
 			t.Fatalf("got %d files, want 3", len(results))
 		}
 
-		expected := []string{path.Join(dirPath, "drop_vendor/lib.js"), path.Join(dirPath, "keep_me.txt"), path.Join(dirPath, "keep_me_too.go")}
+		expected := []string{filepath.Join(dirPath, "drop_vendor", "lib.js"), filepath.Join(dirPath, "keep_me.txt"), filepath.Join(dirPath, "keep_me_too.go")}
 		for i, want := range expected {
 			if results[i] != want {
 				t.Errorf("index %d: got path %q, want %q", i, results[i], want)
@@ -114,7 +113,7 @@ func TestFilter_Logic(t *testing.T) {
 			t.Fatalf("got %d files, want 2", len(results))
 		}
 
-		expected := []string{path.Join(dirPath, "keep_me.txt"), path.Join(dirPath, "keep_me_too.go")}
+		expected := []string{filepath.Join(dirPath, "keep_me.txt"), filepath.Join(dirPath, "keep_me_too.go")}
 		for i, want := range expected {
 			if results[i] != want {
 				t.Errorf("index %d: got path %q, want %q", i, results[i], want)
