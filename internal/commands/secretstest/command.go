@@ -124,8 +124,6 @@ func (c *Command) RunWorkflow(
 
 func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
 	instrumentation := cmdctx.Instrumentation(ctx)
-	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FilterAndUploadFilesTimeout)
-	defer cancelFindFiles()
 
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
@@ -137,7 +135,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		ff.WithLogger(c.Logger),
 		ff.WithAnalytics(instrumentation),
 	)
-	pathsChan := textFilesFilter.Filter(uploadCtx, []string{inputPath})
+	pathsChan := textFilesFilter.Filter(ctx, []string{inputPath})
 
 	// for file inputPath we need to compute the relativity of the file path w.r.t. the file's dir
 	dir := inputPath
@@ -150,7 +148,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 	}
 
 	uploadStartTime := time.Now()
-	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
+	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(ctx, pathsChan, dir)
 	if err != nil {
 		return "", c.ErrorFactory.NewUploadError(err)
 	}
