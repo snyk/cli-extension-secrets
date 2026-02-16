@@ -46,6 +46,9 @@ func (f *textFileOnly) FilterOut(path string) bool {
 	return !IsTextContent(header)
 }
 
+// No metrics to record for text file.
+func (f *textFileOnly) RecordMetrics(_ Analytics) {}
+
 // IsTextContent determines if the data slice contains text content
 // based on the null byte method. See: https://docs.google.com/document/d/1GYir_j0ITTxg_CqyAw8BeUZYCCUyNMAePbGw5nsTGYE/
 func IsTextContent(data []byte) bool {

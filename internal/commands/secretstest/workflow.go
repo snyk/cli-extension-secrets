@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
+	"github.com/snyk/cli-extension-secrets/internal/instrumentation"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
@@ -38,6 +39,7 @@ func SecretsWorkflow(
 ) ([]workflow.Data, error) {
 	ctx := context.Background()
 	ctx = cmdctx.WithIctx(ctx, ictx)
+	ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
 
 	config := ictx.GetConfiguration()
 	logger := ictx.GetEnhancedLogger()

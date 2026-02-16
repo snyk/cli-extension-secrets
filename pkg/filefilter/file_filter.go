@@ -4,6 +4,7 @@ import (
 	"context"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -13,6 +14,12 @@ var ignoreFiles = []string{".gitignore"}
 // FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {
 	FilterOut(path string) bool
+	RecordMetrics(analytics Analytics)
+}
+
+type Analytics interface {
+	RecordSizeFiltered(total int)
+	RecordFileFilterTimeMs(startTime time.Time)
 }
 
 // Pipeline holds the configuration for the filtering process.
@@ -21,6 +28,7 @@ type Pipeline struct {
 	concurrency        int
 	filters            []FileFilter
 	customGlobPatterns []string
+	analytics          Analytics
 }
 
 // Option defines the functional option type.
@@ -64,6 +72,12 @@ func WithFilters(filters ...FileFilter) Option {
 	}
 }
 
+func WithAnalytics(analytics Analytics) Option {
+	return func(p *Pipeline) {
+		p.analytics = analytics
+	}
+}
+
 // WithExcludeGlobs adds user-defined patterns to the pipeline's exclude list.
 func WithExcludeGlobs(userPatterns []string) Option {
 	return func(p *Pipeline) {
@@ -76,6 +90,7 @@ func WithExcludeGlobs(userPatterns []string) Option {
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
 func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
+	filterStart := time.Now()
 	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
@@ -117,6 +132,13 @@ func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string 
 	// Closer routine
 	go func() {
 		wg.Wait()
+		if p.analytics != nil {
+			p.analytics.RecordFileFilterTimeMs(filterStart)
+			// Record specific metrics from each filter
+			for _, filter := range p.filters {
+				filter.RecordMetrics(p.analytics)
+			}
+		}
 		close(filteredFiles)
 	}()
 	return filteredFiles

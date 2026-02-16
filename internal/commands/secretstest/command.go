@@ -123,6 +123,7 @@ func (c *Command) RunWorkflow(
 }
 
 func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
+	instrumentation := cmdctx.Instrumentation(ctx)
 	uploadCtx, cancelFindFiles := context.WithTimeout(ctx, FilterAndUploadFilesTimeout)
 	defer cancelFindFiles()
 
@@ -134,6 +135,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 			ff.TextFileOnlyFilter(c.Logger),
 		),
 		ff.WithLogger(c.Logger),
+		ff.WithAnalytics(instrumentation),
 	)
 	pathsChan := textFilesFilter.Filter(uploadCtx, []string{inputPath})
 
@@ -147,10 +149,15 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		dir = filepath.Dir(inputPath)
 	}
 
+	uploadStartTime := time.Now()
 	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(uploadCtx, pathsChan, dir)
 	if err != nil {
 		return "", c.ErrorFactory.NewUploadError(err)
 	}
+	if instrumentation != nil {
+		instrumentation.RecordFileUploadTimeMs(uploadStartTime)
+	}
+
 	c.Logger.Info().Msg(fmt.Sprintf("Revision ID: %s", uploadRevision.RevisionID))
 
 	return uploadRevision.RevisionID.String(), nil
@@ -158,6 +165,9 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 
 //nolint:ireturn // supposed to return interface.
 func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testapi.TestResult, error) {
+	instrumentation := cmdctx.Instrumentation(ctx)
+	scanStartTime := time.Now()
+
 	testResource, err := createTestResource(uploadRevision, c.RepoURL, c.RootFolderID)
 	if err != nil {
 		return nil, c.ErrorFactory.NewTestResourceError(err)
@@ -175,6 +185,9 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 		return nil, c.ErrorFactory.NewExecuteTestError(err)
 	}
 
+	if instrumentation != nil {
+		instrumentation.RecordAnalysisTimeMs(scanStartTime)
+	}
 	return testResult, nil
 }
 
