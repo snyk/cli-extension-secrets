@@ -78,7 +78,7 @@ func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath st
 		}
 	}
 
-	return relativeInputPath, nil
+	return filepath.ToSlash(relativeInputPath), nil
 }
 
 func isFile(path string) (bool, error) {
