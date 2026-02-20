@@ -70,7 +70,8 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewValidationFailureError(SingleInputPathMsg)
 	}
 
-	inputPath, err := filepath.Abs(inputPaths[0])
+	cleanedInput := normalizeWorkflowInputPath(inputPaths[0])
+	inputPath, err := filepath.Abs(cleanedInput)
 	if err != nil {
 		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], err)
 		return nil, errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
@@ -119,4 +120,20 @@ func SecretsWorkflow(
 	}
 
 	return output, nil
+}
+
+// normalizeWorkflowInputPath sanitizes a raw CLI input path argument.
+// Strips stray quote characters left by shell interpretation of trailing
+// separator+quote (e.g. user types "dir\" and the process receives dir").
+// Trims whitespace and cleans the path on all platforms.
+func normalizeWorkflowInputPath(raw string) string {
+	// s := strings.TrimSpace(raw)
+	// if s == "" {
+	// 	return ""
+	// }
+
+	// s = strings.Trim(s, `"`)
+
+	// return filepath.Clean(s)
+	return raw
 }

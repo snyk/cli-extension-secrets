@@ -221,6 +221,35 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 	assert.Contains(t, catalogErr.Cause.Error(), "scanner error")
 }
 
+func TestCommand_RunWorkflow_FailsOnTrailingQuoteInPath(t *testing.T) {
+	// On Windows cmd.exe, \ escapes only ".
+	// Running: snyk secrets test "C:\project\"
+	// The MSVC C runtime parses the argument as: C:\project"
+	// (the trailing \" turns the closing quote into a literal character).
+	//
+	// The real directory C:\project exists. The appended " makes it
+	// inaccessible: on Windows " is an invalid path character, on Unix
+	// it's a different (nonexistent) path.
+	//
+	// This mangled path reaches RunWorkflow → filterAndUploadFiles → isFile
+	// uncleaned, causing os.Stat to fail. The error propagates up as a
+	// generic "Secrets failure (SNYK-CLI-0023)".
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	_, _, cmd := setupTestCommand(t, ctrl)
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+
+	realDir := t.TempDir()
+	mangledPath := realDir + `"`
+
+	_, err := cmd.RunWorkflow(ctx, mangledPath)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to stat",
+		"bug confirmed: mangled path with trailing \" reaches os.Stat uncleaned, causing SNYK-CLI-0023")
+}
+
 func setupTestCommand(t *testing.T, ctrl *gomock.Controller) (*WorkflowClients, *mock_secretstest.MockUserInterface, *Command) {
 	t.Helper()
 

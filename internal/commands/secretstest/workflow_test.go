@@ -2,6 +2,9 @@
 package secretstest
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -83,6 +86,49 @@ func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Detail, "invalid-value")
+}
+
+// TestQuotedPathWithTrailingSlash_BugDemo demonstrates that filepath.Abs
+// alone does NOT strip stray quotes left by shell interpretation of
+// "dir\" → dir". This test is expected to fail — it documents the bug.
+func TestQuotedPathWithTrailingSlash_BugDemo(t *testing.T) {
+	t.Skip("documents the bug; un-skip to verify it still reproduces")
+
+	sep := string(filepath.Separator)
+	path := strings.Join([]string{"a", "b", "c"}, sep)
+	input := path + sep + `"`
+
+	absPath, err := filepath.Abs(input)
+	assert.NoError(t, err)
+	assert.NotContains(t, absPath, `"`,
+		"resolved path should not contain stray quote characters")
+}
+
+// TestNormalizeWorkflowInputPath_OsStatSucceeds exercises the real path
+// the workflow takes: normalizeWorkflowInputPath → filepath.Abs → os.Stat.
+// Without normalization, a stray quote makes os.Stat fail; with it, it works.
+func TestNormalizeWorkflowInputPath_OsStatSucceeds(t *testing.T) {
+	realDir := t.TempDir()
+	sep := string(filepath.Separator)
+
+	// Simulate the shell bug: "realDir\" → process receives realDir"
+	poisoned := realDir + sep + `"`
+
+	// Without the fix: filepath.Abs keeps the quote → os.Stat fails.
+	absRaw, err := filepath.Abs(poisoned)
+	assert.NoError(t, err)
+	_, statErr := os.Stat(absRaw)
+	assert.Error(t, statErr, "os.Stat should fail on a path containing a stray quote")
+
+	// With the fix: normalize first → filepath.Abs → os.Stat succeeds.
+	cleaned := normalizeWorkflowInputPath(poisoned)
+	absCleaned, err := filepath.Abs(cleaned)
+	assert.NoError(t, err)
+
+	info, statErr := os.Stat(absCleaned)
+	if assert.NoError(t, statErr, "os.Stat should succeed on the sanitized path") {
+		assert.True(t, info.IsDir())
+	}
 }
 
 func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
