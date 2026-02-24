@@ -10,7 +10,7 @@ import (
 	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
-const maxSizeThreshold = 50 * 1000 * 1000 // 50MB
+const maxSizeThreshold = 1 * 1000 * 1000 // 1MB
 
 // createSizedFile creates a temporary file with a specific logical size.
 // It uses file truncation to create sparse files, meaning it sets the
