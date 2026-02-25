@@ -7,6 +7,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
+
+	"github.com/snyk/cli-extension-secrets/internal/instrumentation"
 )
 
 // CtxKey is the type of the keys inside the command context.
@@ -48,11 +50,10 @@ func WithProgressBar(ctx context.Context, progressBar ui.ProgressBar) context.Co
 	return context.WithValue(ctx, ProgressBarKey, progressBar)
 }
 
-/*
 // WithInstrumentation adds instrumentation to the current context.
 func WithInstrumentation(ctx context.Context, instrumentation instrumentation.Instrumentation) context.Context {
 	return context.WithValue(ctx, InstrumentationKey, instrumentation)
-}*/
+}
 
 // Ictx will retrieve the invocation context from the command context.
 // It will return `nil` if the value wasn't set on the context.
@@ -108,11 +109,11 @@ func ProgressBar(ctx context.Context) ui.ProgressBar {
 
 // Instrumentation will retrieve the instrumentation from the command context.
 // It will return `nil` if the value wasn't set on the context.
-/*
+//
+//nolint:ireturn // Returns interface because implementation is private
 func Instrumentation(ctx context.Context) instrumentation.Instrumentation {
 	if instrumentation, ok := ctx.Value(InstrumentationKey).(instrumentation.Instrumentation); ok {
 		return instrumentation
 	}
 	return nil
 }
-*/

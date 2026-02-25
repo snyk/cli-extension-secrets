@@ -7,6 +7,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/ui"
@@ -90,10 +91,12 @@ func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configurati
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	mockUserInterface := mocks.NewMockUserInterface(ctrl)
 	mockProgressBar := mocks.NewMockProgressBar(ctrl)
+	analyticsProvider := analytics.New()
 
 	mockIctx.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
+	mockIctx.EXPECT().GetAnalytics().Return(analyticsProvider).AnyTimes()
 
 	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
 	mockProgressBar.EXPECT().SetTitle("Validating configuration...")

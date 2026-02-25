@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 )
 
 // mockFilter implements FileFilter for testing purposes.
@@ -24,6 +25,22 @@ func (m *mockFilter) FilterOut(path string) bool {
 		return false
 	}
 	return m.fn(path)
+}
+
+func (m *mockFilter) RecordMetrics(_ Analytics) {}
+
+// mockAnalytics implements Analytics for testing purposes.
+type mockAnalytics struct {
+	sizeFilteredCount int
+	filterTimeCalled  bool
+}
+
+func (m *mockAnalytics) RecordSizeFiltered(total int) {
+	m.sizeFilteredCount += total
+}
+
+func (m *mockAnalytics) RecordFileFilterTimeMs(_ time.Time) {
+	m.filterTimeCalled = true
 }
 
 // chanToSlice collects all items from a channel into a slice.
@@ -252,4 +269,81 @@ func newTestLogger() zerolog.Logger {
 		With().
 		Timestamp().
 		Logger()
+}
+
+func TestFileSizeFilter_Metrics(t *testing.T) {
+	logger := newTestLogger()
+
+	tests := []struct {
+		name          string
+		setupFiles    func(dirPath string) []string
+		nilAnalytics  bool
+		expectedCount int
+	}{
+		{
+			name: "All valid files, no metrics recorded",
+			setupFiles: func(dirPath string) []string {
+				valid1 := filepath.Join(dirPath, "valid1.txt")
+				valid2 := filepath.Join(dirPath, "valid2.txt")
+				_ = os.WriteFile(valid1, []byte("content"), 0o600)
+				_ = os.WriteFile(valid2, []byte("content"), 0o600)
+				return []string{valid1, valid2}
+			},
+			expectedCount: 0,
+		},
+		{
+			name: "Mixed files, drops empty and missing",
+			setupFiles: func(dirPath string) []string {
+				valid := filepath.Join(dirPath, "valid.txt")
+				empty := filepath.Join(dirPath, "empty.txt")
+				// intentionally not created
+				missing := filepath.Join(dirPath, "missing.txt")
+
+				_ = os.WriteFile(valid, []byte("content"), 0o600)
+				_ = os.WriteFile(empty, []byte(""), 0o600)
+				return []string{valid, empty, missing}
+			},
+			expectedCount: 2,
+		},
+		{
+			name: "Nil analytics",
+			setupFiles: func(dirPath string) []string {
+				empty := filepath.Join(dirPath, "empty.txt")
+				_ = os.WriteFile(empty, []byte(""), 0o600)
+				return []string{empty}
+			},
+			nilAnalytics: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dirPath := t.TempDir()
+			paths := tt.setupFiles(dirPath)
+
+			filter := &fileSizeFilter{logger: &logger}
+
+			// Process files
+			for _, p := range paths {
+				filter.FilterOut(p)
+			}
+
+			// Setup analytics mock
+			var analytics Analytics
+			mock := &mockAnalytics{}
+			if !tt.nilAnalytics {
+				analytics = mock
+			}
+
+			// In case of nil analytics
+			assert.NotPanics(t, func() {
+				filter.RecordMetrics(analytics)
+			})
+
+			// Assert the final count
+			if !tt.nilAnalytics {
+				assert.Equal(t, tt.expectedCount, mock.sizeFilteredCount)
+			}
+		})
+	}
 }
