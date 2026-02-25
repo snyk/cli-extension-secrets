@@ -33,17 +33,19 @@ type CommandArgs struct {
 	RepoURL           string
 	Excludes          []string
 	ErrorFactory      *ErrorFactory
+	SeverityThreshold string
 }
 
 type Command struct {
-	Logger        *zerolog.Logger
-	OrgID         string
-	RootFolderID  string
-	RepoURL       string
-	Clients       *WorkflowClients
-	Excludes      []string
-	ErrorFactory  *ErrorFactory
-	UserInterface UserInterface
+	Logger            *zerolog.Logger
+	OrgID             string
+	RootFolderID      string
+	RepoURL           string
+	Clients           *WorkflowClients
+	Excludes          []string
+	ErrorFactory      *ErrorFactory
+	UserInterface     UserInterface
+	SeverityThreshold string
 }
 
 type newClientsFunc func(workflow.InvocationContext, string) (*WorkflowClients, error)
@@ -85,14 +87,15 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 	}
 
 	return &Command{
-		Logger:        logger,
-		Clients:       clients,
-		OrgID:         args.OrgID,
-		RepoURL:       args.RepoURL,
-		RootFolderID:  args.RootFolderID,
-		ErrorFactory:  args.ErrorFactory,
-		UserInterface: args.UserInterface,
-		Excludes:      args.Excludes,
+		Logger:            logger,
+		Clients:           clients,
+		OrgID:             args.OrgID,
+		RepoURL:           args.RepoURL,
+		RootFolderID:      args.RootFolderID,
+		ErrorFactory:      args.ErrorFactory,
+		UserInterface:     args.UserInterface,
+		Excludes:          args.Excludes,
+		SeverityThreshold: args.SeverityThreshold,
 	}, nil
 }
 
@@ -171,10 +174,20 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 		return nil, c.ErrorFactory.NewTestResourceError(err)
 	}
 
+	// Only create local policy if severity threshold is specified
+	var localPolicy *testapi.LocalPolicy
+	if c.SeverityThreshold != "" {
+		threshold := testapi.Severity(c.SeverityThreshold)
+
+		localPolicy = &testapi.LocalPolicy{
+			SeverityThreshold: &threshold,
+		}
+	}
+
 	param := testapi.StartTestParams{
 		OrgID:       c.OrgID,
 		Resources:   &[]testapi.TestResourceCreateItem{testResource},
-		LocalPolicy: nil,
+		LocalPolicy: localPolicy,
 		ScanConfig:  &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
 	}
 

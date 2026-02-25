@@ -67,6 +67,8 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewValidationFailureError(err.Error())
 	}
 
+	severityThreshold := config.GetString(FlagSeverityThreshold)
+
 	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
 	if len(inputPaths) != 1 {
 		return nil, errorFactory.NewValidationFailureError(SingleInputPathMsg)
@@ -109,6 +111,7 @@ func SecretsWorkflow(
 		GetClients:        NewWorkflowClients,
 		Excludes:          excludeGlobs,
 		ErrorFactory:      errorFactory,
+		SeverityThreshold: severityThreshold,
 	}
 	c, err := NewCommand(args)
 	if err != nil {
