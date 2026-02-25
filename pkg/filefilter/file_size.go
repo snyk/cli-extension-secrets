@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	_MaxFileSize = 50_000_000 // 50 MB
+	_MaxFileSize = 1_000_000 // 1 MB
 )
 
 type fileSizeFilter struct {
