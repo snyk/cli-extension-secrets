@@ -78,6 +78,7 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
 	}
 
+	inputPath = sanitizePath(inputPath)
 	gitRootDir, err := findGitRoot(inputPath)
 	if err != nil {
 		logger.Err(err).Str("inputPath", inputPath).Msg("could not determine common git root")
