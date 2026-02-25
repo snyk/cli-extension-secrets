@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/snyk/go-application-framework/pkg/utils/git"
@@ -14,6 +15,17 @@ var (
 	Git                = ".git"
 	repoURLFromDirFunc = git.RepoUrlFromDir
 )
+
+// sanitizePath strips double-quote characters from a filesystem path.
+// On Windows, " is an invalid path character that commonly appears when
+// the shell misinterprets a trailing backslash-quote (e.g. "C:\path\").
+// On Unix, " is a valid path character, so the path is returned unchanged.
+func sanitizePath(path string) string {
+	if runtime.GOOS != "windows" {
+		return path
+	}
+	return strings.ReplaceAll(path, `"`, "")
+}
 
 func findGitRoot(inputPath string) (string, error) {
 	if inputPath == "" {
