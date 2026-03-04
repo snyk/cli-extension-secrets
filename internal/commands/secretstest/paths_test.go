@@ -181,6 +181,130 @@ func TestComputeRelativeInput_NormalizesToUnixPaths(t *testing.T) {
 	assert.NotContains(t, result, `\`)
 }
 
+func TestFindBranchName(t *testing.T) {
+	oldBranchNameFromDir := branchNameFromDirFunc
+	defer func() {
+		branchNameFromDirFunc = oldBranchNameFromDir
+	}()
+
+	testCases := []struct {
+		name           string
+		gitRootDir     string
+		mockBranch     string
+		mockErr        error
+		expectedBranch string
+		expectErr      bool
+		expectedErrMsg string
+	}{
+		{
+			name:           "returns branch from git root",
+			gitRootDir:     "/some/repo",
+			mockBranch:     "main",
+			expectedBranch: "main",
+		},
+		{
+			name:           "returns feature branch",
+			gitRootDir:     "/some/repo",
+			mockBranch:     "feat/PS-389/determine-branch",
+			expectedBranch: "feat/PS-389/determine-branch",
+		},
+		{
+			name:           "empty git root returns error",
+			gitRootDir:     "",
+			expectedBranch: "",
+			expectErr:      true,
+			expectedErrMsg: "git root directory not available",
+		},
+		{
+			name:           "git error propagated",
+			gitRootDir:     "/some/repo",
+			mockErr:        errors.New("HEAD is detached"),
+			expectedBranch: "",
+			expectErr:      true,
+			expectedErrMsg: "could not determine branch name",
+		},
+		{
+			name:           "empty branch returned without error",
+			gitRootDir:     "/some/repo",
+			mockBranch:     "",
+			expectedBranch: "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			branchNameFromDirFunc = func(_ string) (string, error) {
+				return tc.mockBranch, tc.mockErr
+			}
+
+			branch, err := findBranchName(tc.gitRootDir)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedBranch, branch)
+			}
+		})
+	}
+}
+
+func TestFindCommitRef(t *testing.T) {
+	oldCommitRefFromDir := commitRefFromDirFunc
+	defer func() {
+		commitRefFromDirFunc = oldCommitRefFromDir
+	}()
+
+	testCases := []struct {
+		name              string
+		gitRootDir        string
+		mockCommitRef     string
+		mockErr           error
+		expectedCommitRef string
+		expectErr         bool
+		expectedErrMsg    string
+	}{
+		{
+			name:              "returns commit ref from git root",
+			gitRootDir:        "/some/repo",
+			mockCommitRef:     "abc123def456",
+			expectedCommitRef: "abc123def456",
+		},
+		{
+			name:              "empty git root returns error",
+			gitRootDir:        "",
+			expectedCommitRef: "",
+			expectErr:         true,
+			expectedErrMsg:    "git root directory not available",
+		},
+		{
+			name:              "git error propagated",
+			gitRootDir:        "/some/repo",
+			mockErr:           errors.New("reference not found"),
+			expectedCommitRef: "",
+			expectErr:         true,
+			expectedErrMsg:    "could not determine commit ref",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			commitRefFromDirFunc = func(_ string) (string, error) {
+				return tc.mockCommitRef, tc.mockErr
+			}
+
+			commitRef, err := findCommitRef(tc.gitRootDir)
+			if tc.expectErr {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedErrMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedCommitRef, commitRef)
+			}
+		})
+	}
+}
+
 func TestFindRepoURLWithOverride(t *testing.T) {
 	oldRepoURLFromDir := repoURLFromDirFunc
 	defer func() {

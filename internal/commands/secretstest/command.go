@@ -41,6 +41,8 @@ type CommandArgs struct {
 	OrgID             string
 	RootFolderID      string
 	RepoURL           string
+	Branch            string
+	CommitRef         string
 	Excludes          []string
 	ErrorFactory      *ErrorFactory
 	SeverityThreshold string
@@ -52,6 +54,8 @@ type Command struct {
 	OrgID             string
 	RootFolderID      string
 	RepoURL           string
+	Branch            string
+	CommitRef         string
 	Clients           *WorkflowClients
 	Excludes          []string
 	ErrorFactory      *ErrorFactory
@@ -103,6 +107,8 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 		Clients:           clients,
 		OrgID:             args.OrgID,
 		RepoURL:           args.RepoURL,
+		Branch:            args.Branch,
+		CommitRef:         args.CommitRef,
 		RootFolderID:      args.RootFolderID,
 		ErrorFactory:      args.ErrorFactory,
 		UserInterface:     args.UserInterface,
@@ -182,7 +188,7 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 	instrumentation := cmdctx.Instrumentation(ctx)
 	scanStartTime := time.Now()
 
-	testResource, err := createTestResource(uploadRevision, c.RepoURL, c.RootFolderID)
+	testResource, err := createTestResource(uploadRevision, c.RepoURL, c.RootFolderID, c.Branch, c.CommitRef)
 	if err != nil {
 		return nil, c.ErrorFactory.NewTestResourceError(err)
 	}
@@ -202,7 +208,7 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 	return testResult, nil
 }
 
-func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestResourceCreateItem, error) {
+func createTestResource(revisionID, repoURL, rootFolderID, branch, commitRef string) (testapi.TestResourceCreateItem, error) {
 	uploadResource := testapi.UploadResource{
 		ContentType:   testapi.UploadResourceContentTypeSource,
 		FilePatterns:  []string{},
@@ -212,11 +218,7 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 		Type:          testapi.Upload,
 	}
 
-	if repoURL != "" {
-		uploadResource.ScmContext = &testapi.ScmContext{
-			RepoUrl: &repoURL,
-		}
-	}
+	uploadResource.ScmContext = buildScmContext(repoURL, branch, commitRef)
 
 	var baseResourceVariant testapi.BaseResourceVariantCreateItem
 	if err := baseResourceVariant.FromUploadResource(uploadResource); err != nil {
@@ -234,6 +236,25 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 	}
 
 	return testResource, nil
+}
+
+func buildScmContext(repoURL, branch, commitRef string) *testapi.ScmContext {
+	if repoURL == "" && branch == "" && commitRef == "" {
+		return nil
+	}
+
+	scmCtx := &testapi.ScmContext{}
+	if repoURL != "" {
+		scmCtx.RepoUrl = &repoURL
+	}
+	if branch != "" {
+		scmCtx.Branch = &branch
+	}
+	if commitRef != "" {
+		scmCtx.CommitRef = &commitRef
+	}
+
+	return scmCtx
 }
 
 func prepareOutput(
