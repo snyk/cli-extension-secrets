@@ -102,6 +102,8 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewInvalidFlagError(err)
 	}
 
+	reportConfig := buildReportConfig(config)
+
 	args := &CommandArgs{
 		InvocationContext: ictx,
 		UserInterface:     u,
@@ -112,6 +114,7 @@ func SecretsWorkflow(
 		Excludes:          excludeGlobs,
 		ErrorFactory:      errorFactory,
 		SeverityThreshold: severityThreshold,
+		ReportConfig:      reportConfig,
 	}
 	c, err := NewCommand(args)
 	if err != nil {
@@ -125,4 +128,23 @@ func SecretsWorkflow(
 	}
 
 	return output, nil
+}
+
+func buildReportConfig(config configuration.Configuration) ReportConfig {
+	rc := ReportConfig{
+		Report: config.GetBool(FlagReport),
+	}
+
+	if !rc.Report {
+		return rc
+	}
+
+	rc.TargetName = config.GetString(FlagTargetName)
+	rc.TargetReference = config.GetString(FlagTargetReference)
+	rc.ProjectTags = config.GetString(FlagProjectTags)
+	rc.ProjectBusinessCriticality = config.GetString(FlagProjectBusinessCriticality)
+	rc.ProjectEnvironment = config.GetString(FlagProjectEnvironment)
+	rc.ProjectLifecycle = config.GetString(FlagProjectLifecycle)
+
+	return rc
 }
