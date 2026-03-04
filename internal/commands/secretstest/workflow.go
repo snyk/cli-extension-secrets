@@ -97,6 +97,16 @@ func SecretsWorkflow(
 		logger.Err(err).Str("remoteRepoURLFlag", remoteRepoURLFlag).Str("inputPath", inputPath).Msg("could not compute gitRoot or repoURL")
 	}
 
+	branch, err := findBranchName(gitRootDir)
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not determine git branch")
+	}
+
+	commitRef, err := findCommitRef(gitRootDir)
+	if err != nil {
+		logger.Warn().Err(err).Msg("could not determine git commit ref")
+	}
+
 	excludeGlobs, err := parseExcludeFlag(config)
 	if err != nil {
 		return nil, errorFactory.NewInvalidFlagError(err)
@@ -110,6 +120,8 @@ func SecretsWorkflow(
 		OrgID:             orgID,
 		RootFolderID:      inputPathRelativeToGitRoot,
 		RepoURL:           repoURL,
+		Branch:            branch,
+		CommitRef:         commitRef,
 		GetClients:        NewWorkflowClients,
 		Excludes:          excludeGlobs,
 		ErrorFactory:      errorFactory,

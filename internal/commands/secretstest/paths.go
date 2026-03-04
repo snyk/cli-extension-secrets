@@ -8,12 +8,15 @@ import (
 	"runtime"
 	"strings"
 
+	gogit "github.com/go-git/go-git/v5"
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
 var (
-	Git                = ".git"
-	repoURLFromDirFunc = git.RepoUrlFromDir
+	Git                   = ".git"
+	repoURLFromDirFunc    = git.RepoUrlFromDir
+	branchNameFromDirFunc = git.BranchNameFromDir
+	commitRefFromDirFunc  = commitRefFromDir
 )
 
 // sanitizePath strips double-quote characters from a filesystem path.
@@ -64,6 +67,48 @@ func findRepoURLWithOverride(gitRootFolder, remoteRepoURLFlag string) (repoURL s
 	}
 
 	return repoURL, nil
+}
+
+func findBranchName(gitRootDir string) (string, error) {
+	if gitRootDir == "" {
+		return "", fmt.Errorf("git root directory not available")
+	}
+
+	branch, err := branchNameFromDirFunc(gitRootDir)
+	if err != nil {
+		return "", fmt.Errorf("could not determine branch name from %s: %w", gitRootDir, err)
+	}
+
+	return branch, nil
+}
+
+func commitRefFromDir(inputDir string) (string, error) {
+	repo, err := gogit.PlainOpenWithOptions(inputDir, &gogit.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	ref, err := repo.Head()
+	if err != nil {
+		return "", err
+	}
+
+	return ref.Hash().String(), nil
+}
+
+func findCommitRef(gitRootDir string) (string, error) {
+	if gitRootDir == "" {
+		return "", fmt.Errorf("git root directory not available")
+	}
+
+	commitRef, err := commitRefFromDirFunc(gitRootDir)
+	if err != nil {
+		return "", fmt.Errorf("could not determine commit ref from %s: %w", gitRootDir, err)
+	}
+
+	return commitRef, nil
 }
 
 func computeRelativeInput(inputPath, gitRootFolder string) (relativeInputPath string, err error) {
