@@ -24,6 +24,16 @@ const (
 	LogFieldCount               = "count"
 )
 
+type ReportConfig struct {
+	Report                     bool
+	TargetName                 string
+	TargetReference            string
+	ProjectTags                string
+	ProjectBusinessCriticality string
+	ProjectEnvironment         string
+	ProjectLifecycle           string
+}
+
 type CommandArgs struct {
 	InvocationContext workflow.InvocationContext
 	UserInterface     *CLIUserInterface
@@ -34,6 +44,7 @@ type CommandArgs struct {
 	Excludes          []string
 	ErrorFactory      *ErrorFactory
 	SeverityThreshold string
+	ReportConfig      ReportConfig
 }
 
 type Command struct {
@@ -46,6 +57,7 @@ type Command struct {
 	ErrorFactory      *ErrorFactory
 	UserInterface     UserInterface
 	SeverityThreshold string
+	ReportConfig      ReportConfig
 }
 
 type newClientsFunc func(workflow.InvocationContext, string) (*WorkflowClients, error)
@@ -96,6 +108,7 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 		UserInterface:     args.UserInterface,
 		Excludes:          args.Excludes,
 		SeverityThreshold: args.SeverityThreshold,
+		ReportConfig:      args.ReportConfig,
 	}, nil
 }
 
@@ -174,22 +187,9 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 		return nil, c.ErrorFactory.NewTestResourceError(err)
 	}
 
-	// Only create local policy if severity threshold is specified
-	var localPolicy *testapi.LocalPolicy
-	if c.SeverityThreshold != "" {
-		threshold := testapi.Severity(c.SeverityThreshold)
-
-		localPolicy = &testapi.LocalPolicy{
-			SeverityThreshold: &threshold,
-		}
-	}
-
-	param := testapi.StartTestParams{
-		OrgID:       c.OrgID,
-		Resources:   &[]testapi.TestResourceCreateItem{testResource},
-		LocalPolicy: localPolicy,
-		ScanConfig:  &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
-	}
+	testConfig := buildTestConfiguration(&c.ReportConfig, c.SeverityThreshold)
+	resources := []testapi.TestResourceCreateItem{testResource}
+	param := testapi.NewStartTestParamsFromResources(c.OrgID, &resources, testConfig)
 
 	testResult, err := c.executeTest(ctx, param)
 	if err != nil {
@@ -210,6 +210,12 @@ func createTestResource(revisionID, repoURL, rootFolderID string) (testapi.TestR
 		RepositoryUrl: &repoURL,
 		RootFolderId:  &rootFolderID,
 		Type:          testapi.Upload,
+	}
+
+	if repoURL != "" {
+		uploadResource.ScmContext = &testapi.ScmContext{
+			RepoUrl: &repoURL,
+		}
 	}
 
 	var baseResourceVariant testapi.BaseResourceVariantCreateItem
@@ -296,4 +302,48 @@ func (c *Command) executeTest(ctx context.Context, params testapi.StartTestParam
 	}
 
 	return finalResult, nil
+}
+
+func buildTestConfiguration(rc *ReportConfig, severityThreshold string) *testapi.TestConfiguration {
+	cfg := &testapi.TestConfiguration{
+		ScanConfig: &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
+	}
+
+	if severityThreshold != "" {
+		threshold := testapi.Severity(severityThreshold)
+		cfg.LocalPolicy = &testapi.LocalPolicy{
+			SeverityThreshold: &threshold,
+		}
+	}
+
+	if !rc.Report {
+		return cfg
+	}
+
+	report := true
+	cfg.PublishReport = &report
+
+	if rc.TargetName != "" {
+		cfg.TargetName = &rc.TargetName
+	}
+	if rc.TargetReference != "" {
+		cfg.TargetReference = &rc.TargetReference
+	}
+	if rc.ProjectBusinessCriticality != "" {
+		cfg.ProjectBusinessCriticality = &rc.ProjectBusinessCriticality
+	}
+	if rc.ProjectEnvironment != "" {
+		envs := strings.Split(rc.ProjectEnvironment, ",")
+		cfg.ProjectEnvironment = &envs
+	}
+	if rc.ProjectLifecycle != "" {
+		lifecycles := strings.Split(rc.ProjectLifecycle, ",")
+		cfg.ProjectLifecycle = &lifecycles
+	}
+	if rc.ProjectTags != "" {
+		tags := strings.Split(rc.ProjectTags, ",")
+		cfg.ProjectTags = &tags
+	}
+
+	return cfg
 }
