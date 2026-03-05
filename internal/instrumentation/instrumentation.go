@@ -8,10 +8,10 @@ import (
 
 // Custom metric keys.
 const (
-	SecretsAnalysisTimeMs   string = "secretsAnalysisTimeMs"
-	SecretsFileUploadTimeMs string = "secretsFileUploadMs"
-	SecretsFileFilterTimeMs string = "secretsFileFilterMs"
-	SecretsSizeFiltered     string = "secretsSizeFiltered"
+	SecretsAnalysisTimeMs   string = "analysisTimeMs"
+	SecretsFileUploadTimeMs string = "fileUploadMs"
+	SecretsFileFilterTimeMs string = "fileFilterMs"
+	SecretsSizeFiltered     string = "sizeFiltered"
 )
 
 // Instrumentation defines the interface that we expect for instrumentation objects.
