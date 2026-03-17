@@ -53,10 +53,6 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
-	if config.IsSet(FlagReport) {
-		return nil, errorFactory.NewFeatureUnderDevelopmentError(ReportNotSupportedMsg)
-	}
-
 	orgID := config.GetString(configuration.ORGANIZATION)
 	if orgID == "" {
 		return nil, errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
