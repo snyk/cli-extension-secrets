@@ -28,7 +28,7 @@ func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
 	assert.Contains(t, catalogErr.Detail, "User not allowed to run without feature flag.")
 }
 
-func TestSecretsWorkflow_JSONDisabled(t *testing.T) {
+func TestSecretsWorkflow_JSONNotSupported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -39,10 +39,10 @@ func TestSecretsWorkflow_JSONDisabled(t *testing.T) {
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --json is temporarily disabled.")
+	assert.Contains(t, catalogErr.Detail, "Flag --json is not yet supported.")
 }
 
-func TestSecretsWorkflow_JSONFileOutputDisabled(t *testing.T) {
+func TestSecretsWorkflow_JSONFileOutputNotSupported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -53,10 +53,10 @@ func TestSecretsWorkflow_JSONFileOutputDisabled(t *testing.T) {
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --json is temporarily disabled.")
+	assert.Contains(t, catalogErr.Detail, "Flag --json is not yet supported.")
 }
 
-func TestSecretsWorkflow_SARIFDisabled(t *testing.T) {
+func TestSecretsWorkflow_SARIFNotSupported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -67,10 +67,10 @@ func TestSecretsWorkflow_SARIFDisabled(t *testing.T) {
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --sarif is temporarily disabled.")
+	assert.Contains(t, catalogErr.Detail, "Flag --sarif is not yet supported.")
 }
 
-func TestSecretsWorkflow_SARIFFileOutputDisabled(t *testing.T) {
+func TestSecretsWorkflow_SARIFFileOutputNotSupported(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -81,7 +81,7 @@ func TestSecretsWorkflow_SARIFFileOutputDisabled(t *testing.T) {
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --sarif is temporarily disabled.")
+	assert.Contains(t, catalogErr.Detail, "Flag --sarif is not yet supported.")
 }
 
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
