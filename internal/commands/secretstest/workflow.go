@@ -53,7 +53,7 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
-	if msg, disabled := validateDisabledFlags(config); disabled {
+	if msg, unsupported := validateUnsupportedFlags(config); unsupported {
 		return nil, errorFactory.NewFeatureUnderDevelopmentError(msg)
 	}
 

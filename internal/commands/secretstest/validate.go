@@ -30,12 +30,12 @@ type flagWithOptions struct {
 	validOptions map[string]struct{}
 }
 
-func validateDisabledFlags(config configuration.Configuration) (string, bool) {
+func validateUnsupportedFlags(config configuration.Configuration) (string, bool) {
 	if config.GetBool(FlagJSON) || config.IsSet(FlagJSONFileOutput) {
-		return JSONDisabledMsg, true
+		return JSONNotSupportedMsg, true
 	}
 	if config.GetBool(FlagSARIF) || config.IsSet(FlagSARIFFileOutput) {
-		return SARIFDisabledMsg, true
+		return SARIFNotSupportedMsg, true
 	}
 	return "", false
 }
