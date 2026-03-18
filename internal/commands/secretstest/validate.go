@@ -30,6 +30,16 @@ type flagWithOptions struct {
 	validOptions map[string]struct{}
 }
 
+func validateDisabledFlags(config configuration.Configuration) (string, bool) {
+	if config.GetBool(FlagJSON) || config.IsSet(FlagJSONFileOutput) {
+		return JSONDisabledMsg, true
+	}
+	if config.GetBool(FlagSARIF) || config.IsSet(FlagSARIFFileOutput) {
+		return SARIFDisabledMsg, true
+	}
+	return "", false
+}
+
 func validateFlagsConfig(config configuration.Configuration) error {
 	// check --report related flags only if --report is true, otherwise flags are ignored
 	err := validateReportConfig(config)
