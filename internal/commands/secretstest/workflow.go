@@ -15,6 +15,7 @@ import (
 
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
+	InputPathKey                = "inputPath"
 )
 
 var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
@@ -33,7 +34,6 @@ func RegisterWorkflows(e workflow.Engine) error {
 	return nil
 }
 
-//nolint:gocyclo // will refactor in next PR.
 func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,
@@ -50,38 +50,13 @@ func SecretsWorkflow(
 	u.SetTitle(TitleValidating)
 	defer u.Clear()
 
-	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return nil, errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
-	}
-
-	if msg, unsupported := validateUnsupportedFlags(config); unsupported {
-		return nil, errorFactory.NewFeatureUnderDevelopmentError(msg)
-	}
-
-	orgID := config.GetString(configuration.ORGANIZATION)
-	if orgID == "" {
-		return nil, errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
-	}
-
-	err := validateFlagsConfig(config)
+	// validate config and prepare input path
+	orgID, inputPath, err := validateAndPrepareInput(config, errorFactory)
 	if err != nil {
-		return nil, errorFactory.NewValidationFailureError(err.Error())
+		return nil, err
 	}
 
-	severityThreshold := config.GetString(FlagSeverityThreshold)
-
-	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
-	if len(inputPaths) != 1 {
-		return nil, errorFactory.NewValidationFailureError(SingleInputPathMsg)
-	}
-
-	inputPath, err := filepath.Abs(inputPaths[0])
-	if err != nil {
-		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], err)
-		return nil, errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
-	}
-
-	inputPath = sanitizePath(inputPath)
+	// identify git root and get repo data if available
 	gitRootDir, err := findGitRoot(inputPath)
 	if err != nil {
 		// if the git root dir is not found it means the dir is not a git repo
@@ -91,49 +66,33 @@ func SecretsWorkflow(
 			config.Set(FlagTargetName, filepath.Base(inputPath))
 		}
 
-		logger.Err(err).Str("inputPath", inputPath).Msg("could not determine common git root")
-	}
-
-	inputPathRelativeToGitRoot, err := computeRelativeInput(inputPath, gitRootDir)
-	if err != nil {
-		logger.Err(err).Str("inputPathRelativeToGitRoot", inputPathRelativeToGitRoot).Msg("could not determine common repo root")
+		logger.Err(err).Str(InputPathKey, inputPath).Msg("could not determine common git root")
 	}
 
 	remoteRepoURLFlag := config.GetString(FlagRemoteRepoURL)
-	repoURL, err := findRepoURLWithOverride(gitRootDir, remoteRepoURLFlag)
-	if err != nil {
-		logger.Err(err).Str("remoteRepoURLFlag", remoteRepoURLFlag).Str("inputPath", inputPath).Msg("could not compute gitRoot or repoURL")
-	}
+	repoContext := resolveGitContext(inputPath, gitRootDir, remoteRepoURLFlag, logger)
 
-	branch, err := findBranchName(gitRootDir)
-	if err != nil {
-		logger.Warn().Err(err).Msg("could not determine git branch")
-	}
-
-	commitRef, err := findCommitRef(gitRootDir)
-	if err != nil {
-		logger.Warn().Err(err).Msg("could not determine git commit ref")
-	}
-
+	// parse excludes
 	excludeGlobs, err := parseExcludeFlag(config)
 	if err != nil {
 		return nil, errorFactory.NewInvalidFlagError(err)
 	}
 
+	// parse --report config
 	reportConfig := buildReportConfig(config)
 
 	args := &CommandArgs{
 		InvocationContext: ictx,
 		UserInterface:     u,
 		OrgID:             orgID,
-		RootFolderID:      inputPathRelativeToGitRoot,
-		RepoURL:           repoURL,
-		Branch:            branch,
-		CommitRef:         commitRef,
+		RootFolderID:      repoContext.inputPathRelativeToGitRoot,
+		RepoURL:           repoContext.repoURL,
+		Branch:            repoContext.branch,
+		CommitRef:         repoContext.commitRef,
 		GetClients:        NewWorkflowClients,
 		Excludes:          excludeGlobs,
 		ErrorFactory:      errorFactory,
-		SeverityThreshold: severityThreshold,
+		SeverityThreshold: config.GetString(FlagSeverityThreshold),
 		ReportConfig:      reportConfig,
 	}
 	c, err := NewCommand(args)
@@ -141,7 +100,7 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnableToInitializeMsg)
 	}
 
-	logger.Info().Str("inputPath", inputPath).Msg("Running secrets workflow...")
+	logger.Info().Str(InputPathKey, inputPath).Msg("Running secrets workflow...")
 	output, err := c.RunWorkflow(ctx, inputPath)
 	if err != nil {
 		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnexpectedErrorMsg)
