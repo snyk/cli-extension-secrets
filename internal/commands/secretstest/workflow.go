@@ -33,6 +33,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 	return nil
 }
 
+//nolint:gocyclo // will refactor in next PR.
 func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,
@@ -83,6 +84,13 @@ func SecretsWorkflow(
 	inputPath = sanitizePath(inputPath)
 	gitRootDir, err := findGitRoot(inputPath)
 	if err != nil {
+		// if the git root dir is not found it means the dir is not a git repo
+		// in case of --report and no target name already set, we need to manually set the target name to the name of the dir
+		// in order to enable target + project creation
+		if config.IsSet(FlagReport) && !config.IsSet(FlagTargetName) {
+			config.Set(FlagTargetName, filepath.Base(inputPath))
+		}
+
 		logger.Err(err).Str("inputPath", inputPath).Msg("could not determine common git root")
 	}
 
