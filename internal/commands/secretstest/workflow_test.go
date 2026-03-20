@@ -2,6 +2,8 @@
 package secretstest
 
 import (
+	"net/http"
+	"path/filepath"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -128,6 +130,68 @@ func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
 	assert.Contains(t, catalogErr.Detail, "invalid-value")
 }
 
+func TestSecretsWorkflow_NonGitRepo_ReportWithoutTargetName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tmpDir := t.TempDir()
+
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
+	mockConfig.Set(FlagReport, true)
+
+	mockIctx := setupMockIctxWithNetworkAccess(ctrl, mockConfig)
+
+	_, _ = SecretsWorkflow(mockIctx, []workflow.Data{})
+
+	assert.Equal(t, filepath.Base(tmpDir), mockConfig.GetString(FlagTargetName),
+		"target-name should be set to dir name when the input is a non-git repo and scan is triggered with --report")
+}
+
+func TestSecretsWorkflow_NonGitRepo_ReportWithTargetName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tmpDir := t.TempDir()
+	userTargetName := "my-custom-project-name"
+
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
+	mockConfig.Set(FlagReport, true)
+	mockConfig.Set(FlagTargetName, userTargetName)
+
+	mockIctx := setupMockIctxWithNetworkAccess(ctrl, mockConfig)
+
+	_, _ = SecretsWorkflow(mockIctx, []workflow.Data{})
+
+	assert.Equal(t, userTargetName, mockConfig.GetString(FlagTargetName),
+		"user provided target-name should not be overwritten for --report on non-git repo input")
+}
+
+func TestSecretsWorkflow_NonGitRepo_WithoutReport(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tmpDir := t.TempDir()
+
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
+
+	mockIctx := setupMockIctxWithNetworkAccess(ctrl, mockConfig)
+
+	_, _ = SecretsWorkflow(mockIctx, []workflow.Data{})
+
+	assert.Empty(t, mockConfig.GetString(FlagTargetName),
+		"target-name should not be set for non-git repo input when --report is not used")
+}
+
+// setupMockIctx sets expectations on the mock invocation context when the workflow fails during the validation step.
 func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
 	logger := zerolog.Nop()
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
@@ -143,6 +207,32 @@ func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configurati
 	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
 	mockProgressBar.EXPECT().SetTitle("Validating configuration...")
 	mockProgressBar.EXPECT().UpdateProgress(ui.InfiniteProgress)
+	mockProgressBar.EXPECT().Clear()
+
+	return mockIctx
+}
+
+// setupMockIctxWithNetworkAccess extends setupMockIctx with GetNetworkAccess expectations,
+// needed when the workflow progresses past validation into client creation.
+func setupMockIctxWithNetworkAccess(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
+	logger := zerolog.Nop()
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	mockUserInterface := mocks.NewMockUserInterface(ctrl)
+	mockProgressBar := mocks.NewMockProgressBar(ctrl)
+	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
+	analyticsProvider := analytics.New()
+
+	mockIctx.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
+	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
+	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
+	mockIctx.EXPECT().GetAnalytics().Return(analyticsProvider).AnyTimes()
+	mockIctx.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
+
+	mockNetworkAccess.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
+
+	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
+	mockProgressBar.EXPECT().SetTitle(gomock.Any()).AnyTimes()
+	mockProgressBar.EXPECT().UpdateProgress(gomock.Any()).AnyTimes()
 	mockProgressBar.EXPECT().Clear()
 
 	return mockIctx
