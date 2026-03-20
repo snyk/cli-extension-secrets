@@ -3,6 +3,7 @@ package secretstest
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
@@ -28,6 +29,41 @@ type flagWithOptions struct {
 	allowEmpty   bool
 	singleChoice bool
 	validOptions map[string]struct{}
+}
+
+func validateAndPrepareInput(
+	config configuration.Configuration,
+	errorFactory *ErrorFactory,
+) (orgID, inputPath string, err error) {
+	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
+		return "", "", errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
+	}
+
+	if msg, unsupported := validateUnsupportedFlags(config); unsupported {
+		return "", "", errorFactory.NewFeatureUnderDevelopmentError(msg)
+	}
+
+	orgID = config.GetString(configuration.ORGANIZATION)
+	if orgID == "" {
+		return "", "", errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
+	}
+
+	if e := validateFlagsConfig(config); e != nil {
+		return "", "", errorFactory.NewValidationFailureError(e.Error())
+	}
+
+	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
+	if len(inputPaths) != 1 {
+		return "", "", errorFactory.NewValidationFailureError(SingleInputPathMsg)
+	}
+
+	absPath, e := filepath.Abs(inputPaths[0])
+	if e != nil {
+		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], err)
+		return "", "", errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
+	}
+
+	return orgID, sanitizePath(absPath), nil
 }
 
 func validateUnsupportedFlags(config configuration.Configuration) (string, bool) {
