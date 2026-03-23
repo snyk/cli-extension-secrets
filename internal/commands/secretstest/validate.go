@@ -39,8 +39,9 @@ func validateAndPrepareInput(
 		return "", "", errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
-	if msg, unsupported := validateUnsupportedFlags(config); unsupported {
-		return "", "", errorFactory.NewFeatureUnderDevelopmentError(msg)
+	unsupportedErr := validateUnsupportedFlags(config)
+	if unsupportedErr != nil {
+		return "", "", unsupportedErr
 	}
 
 	orgID = config.GetString(configuration.ORGANIZATION)
@@ -66,14 +67,14 @@ func validateAndPrepareInput(
 	return orgID, sanitizePath(absPath), nil
 }
 
-func validateUnsupportedFlags(config configuration.Configuration) (string, bool) {
+func validateUnsupportedFlags(config configuration.Configuration) error {
 	if config.GetBool(FlagJSON) || config.IsSet(FlagJSONFileOutput) {
-		return JSONNotSupportedMsg, true
+		return cli_errors.NewInvalidFlagOptionError(JSONNotSupportedMsg)
 	}
 	if config.GetBool(FlagSARIF) || config.IsSet(FlagSARIFFileOutput) {
-		return SARIFNotSupportedMsg, true
+		return cli_errors.NewInvalidFlagOptionError(SARIFNotSupportedMsg)
 	}
-	return "", false
+	return nil
 }
 
 func validateFlagsConfig(config configuration.Configuration) error {
