@@ -1,3 +1,4 @@
+// Package filefilter provides a concurrent pipeline for filtering files by size, content type, and glob patterns.
 package filefilter
 
 import (
@@ -17,6 +18,7 @@ type FileFilter interface {
 	RecordMetrics(analytics Analytics)
 }
 
+// Analytics defines the metrics recording interface used by the filter pipeline.
 type Analytics interface {
 	RecordSizeFiltered(total int)
 	RecordFileFilterTimeMs(startTime time.Time)
@@ -58,7 +60,7 @@ func WithConcurrency(n int) Option {
 	}
 }
 
-// WithConcurrency allows overriding the default worker count.
+// WithLogger sets the logger for the pipeline.
 func WithLogger(logger *zerolog.Logger) Option {
 	return func(p *Pipeline) {
 		p.logger = logger
@@ -72,6 +74,7 @@ func WithFilters(filters ...FileFilter) Option {
 	}
 }
 
+// WithAnalytics sets the analytics recorder for filter metrics.
 func WithAnalytics(analytics Analytics) Option {
 	return func(p *Pipeline) {
 		p.analytics = analytics

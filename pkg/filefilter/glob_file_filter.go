@@ -5,6 +5,7 @@ import (
 	"strings"
 )
 
+// ErrPathNotAllowed is returned when an exclude rule contains a path separator.
 var ErrPathNotAllowed = errors.New("paths are not allowed in exclude rules")
 
 var ignoredExtensionsGlob = []string{

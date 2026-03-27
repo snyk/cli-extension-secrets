@@ -16,6 +16,8 @@ type fileSizeFilter struct {
 	filteredFiles atomic.Int64
 }
 
+// FileSizeFilter returns a filter that drops empty files and files larger than 1 MB.
+//
 //nolint:ireturn // Returns interface because implementation is private
 func FileSizeFilter(logger *zerolog.Logger) FileFilter {
 	return &fileSizeFilter{

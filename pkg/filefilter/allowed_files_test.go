@@ -25,7 +25,7 @@ func setupTempDir(t *testing.T, files map[string]string) string {
 
 	for path, content := range files {
 		fullPath := filepath.Join(canonicalPath, path)
-		err := os.MkdirAll(filepath.Dir(fullPath), 0o755)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0o750)
 		if err != nil {
 			t.Fatalf("failed to create dir: %v", err)
 		}
@@ -84,7 +84,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { os.Chdir(oldWd) })
+		t.Cleanup(func() { _ = os.Chdir(oldWd) })
 
 		ctx := context.Background()
 
@@ -122,7 +122,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { os.Chdir(oldWd) })
+		t.Cleanup(func() { _ = os.Chdir(oldWd) })
 
 		ctx := context.Background()
 

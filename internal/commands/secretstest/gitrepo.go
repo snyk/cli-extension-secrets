@@ -13,6 +13,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
+// Git repository detection and context resolution.
 var (
 	Git                   = ".git"
 	repoURLFromDirFunc    = git.RepoUrlFromDir

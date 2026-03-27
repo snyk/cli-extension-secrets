@@ -1,3 +1,4 @@
+// Package instrumentation provides analytics recording for the secrets workflow.
 package instrumentation
 
 import (
@@ -25,10 +26,11 @@ type Instrumentation interface {
 }
 
 // NewGAFInstrumentation will create a new GAFInstrumentation based on the provided GAF analytics.
-func NewGAFInstrumentation(analytics analytics.Analytics) *GAFInstrumentation {
-	return &GAFInstrumentation{analytics}
+func NewGAFInstrumentation(a analytics.Analytics) *GAFInstrumentation {
+	return &GAFInstrumentation{a}
 }
 
+// GAFInstrumentation records timing and size metrics via the GAF analytics API.
 type GAFInstrumentation struct {
 	analytics analytics.Analytics
 }
@@ -38,18 +40,22 @@ func (i *GAFInstrumentation) RecordTime(key string, startTime time.Time) {
 	i.analytics.AddExtensionIntegerValue(key, int(time.Since(startTime).Milliseconds()))
 }
 
+// RecordAnalysisTimeMs records the duration of the secrets analysis phase.
 func (i *GAFInstrumentation) RecordAnalysisTimeMs(startTime time.Time) {
 	i.RecordTime(SecretsAnalysisTimeMs, startTime)
 }
 
+// RecordFileUploadTimeMs records the duration of the file upload phase.
 func (i *GAFInstrumentation) RecordFileUploadTimeMs(startTime time.Time) {
 	i.RecordTime(SecretsFileUploadTimeMs, startTime)
 }
 
+// RecordFileFilterTimeMs records the duration of the file filtering phase.
 func (i *GAFInstrumentation) RecordFileFilterTimeMs(startTime time.Time) {
 	i.RecordTime(SecretsFileFilterTimeMs, startTime)
 }
 
+// RecordSizeFiltered records the number of files excluded by size filtering.
 func (i *GAFInstrumentation) RecordSizeFiltered(total int) {
 	i.analytics.AddExtensionIntegerValue(SecretsSizeFiltered, total)
 }
