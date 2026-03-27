@@ -191,6 +191,78 @@ func TestSecretsWorkflow_NonGitRepo_WithoutReport(t *testing.T) {
 		"target-name should not be set for non-git repo input when --report is not used")
 }
 
+func TestBuildReportConfig_ReportFalse_ReturnsEmptyConfig(t *testing.T) {
+	config := configuration.New()
+
+	rc := buildReportConfig(config)
+
+	assert.False(t, rc.Report)
+	assert.Empty(t, rc.TargetName)
+	assert.Empty(t, rc.ProjectPageURL)
+}
+
+func TestBuildReportConfig_ReportTrue_SetsProjectPageURL(t *testing.T) {
+	config := configuration.New()
+	config.Set(FlagReport, true)
+	config.Set(configuration.ORGANIZATION_SLUG, "my-org")
+	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
+
+	rc := buildReportConfig(config)
+
+	assert.True(t, rc.Report)
+	assert.Equal(t, "https://app.snyk.io/org/my-org/project", *rc.ProjectPageURL)
+}
+
+func TestBuildReportConfig_ReportTrue_AllFields(t *testing.T) {
+	config := configuration.New()
+	config.Set(FlagReport, true)
+	config.Set(FlagTargetName, "my-target")
+	config.Set(FlagTargetReference, "main")
+	config.Set(FlagProjectTags, "team=security")
+	config.Set(FlagProjectBusinessCriticality, "critical")
+	config.Set(FlagProjectEnvironment, "frontend")
+	config.Set(FlagProjectLifecycle, "production")
+	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
+	config.Set(configuration.WEB_APP_URL, "https://snyk.example.com")
+
+	rc := buildReportConfig(config)
+
+	assert.True(t, rc.Report)
+	assert.Equal(t, "my-target", rc.TargetName)
+	assert.Equal(t, "main", rc.TargetReference)
+	assert.Equal(t, "team=security", rc.ProjectTags)
+	assert.Equal(t, "critical", rc.ProjectBusinessCriticality)
+	assert.Equal(t, "frontend", rc.ProjectEnvironment)
+	assert.Equal(t, "production", rc.ProjectLifecycle)
+	assert.Equal(t, "https://snyk.example.com/org/test-org/project", *rc.ProjectPageURL)
+}
+
+func TestBuildReportConfig_ReportTrue_EmptyOrgAndWeb(t *testing.T) {
+	config := configuration.New()
+	config.Set(FlagReport, true)
+
+	rc := buildReportConfig(config)
+
+	assert.True(t, rc.Report)
+	assert.Nil(t, rc.ProjectPageURL,
+		"ProjectPageURL should not be constructed with empty org/web values")
+}
+
+func TestBuildReportConfig_ReportFalse_IgnoresAllFields(t *testing.T) {
+	config := configuration.New()
+	config.Set(FlagTargetName, "should-not-appear")
+	config.Set(FlagTargetReference, "should-not-appear")
+	config.Set(configuration.ORGANIZATION_SLUG, "my-org")
+	config.Set(configuration.WEB_APP_URL, "https://app.snyk.io")
+
+	rc := buildReportConfig(config)
+
+	assert.False(t, rc.Report)
+	assert.Empty(t, rc.TargetName)
+	assert.Empty(t, rc.TargetReference)
+	assert.Empty(t, rc.ProjectPageURL)
+}
+
 // setupMockIctx sets expectations on the mock invocation context when the workflow fails during the validation step.
 func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
 	logger := zerolog.Nop()
@@ -212,28 +284,12 @@ func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configurati
 	return mockIctx
 }
 
-// setupMockIctxWithNetworkAccess extends setupMockIctx with GetNetworkAccess expectations,
-// needed when the workflow progresses past validation into client creation.
 func setupMockIctxWithNetworkAccess(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
-	logger := zerolog.Nop()
-	mockIctx := mocks.NewMockInvocationContext(ctrl)
-	mockUserInterface := mocks.NewMockUserInterface(ctrl)
-	mockProgressBar := mocks.NewMockProgressBar(ctrl)
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
 	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
-	analyticsProvider := analytics.New()
-
-	mockIctx.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
-	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
-	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
-	mockIctx.EXPECT().GetAnalytics().Return(analyticsProvider).AnyTimes()
 	mockIctx.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()
-
 	mockNetworkAccess.EXPECT().GetHttpClient().Return(&http.Client{}).AnyTimes()
-
-	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
-	mockProgressBar.EXPECT().SetTitle(gomock.Any()).AnyTimes()
-	mockProgressBar.EXPECT().UpdateProgress(gomock.Any()).AnyTimes()
-	mockProgressBar.EXPECT().Clear()
 
 	return mockIctx
 }

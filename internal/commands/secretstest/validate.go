@@ -60,7 +60,7 @@ func validateAndPrepareInput(
 
 	absPath, e := filepath.Abs(inputPaths[0])
 	if e != nil {
-		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], err)
+		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], e)
 		return "", "", errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
 	}
 

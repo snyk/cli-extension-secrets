@@ -3,12 +3,12 @@ module github.com/snyk/cli-extension-secrets
 go 1.25
 
 require (
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260304134024-415b9c2b6340
+	github.com/snyk/go-application-framework v0.0.0-20260327122941-75e9ad7947c9
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 )

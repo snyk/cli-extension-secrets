@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"testing"
@@ -380,6 +381,339 @@ func Test_buildTestConfiguration_AttributesIgnoredWhenReportFalse(t *testing.T) 
 	assert.Nil(t, cfg.ProjectTags)
 }
 
+func TestPrepareOutput_NoReport_ReturnsFindingsInOutput(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	cmd := &Command{
+		Logger:       &logger,
+		ReportConfig: ReportConfig{Report: false},
+	}
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	findingContent, err := os.ReadFile("./testdata/finding.json")
+	require.NoError(t, err)
+	var expectedFindings []testapi.FindingData
+	require.NoError(t, json.Unmarshal(findingContent, &expectedFindings))
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(expectedFindings, true, nil).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	require.Len(t, output, 1)
+	assert.Empty(t, output[0].GetErrorList())
+
+	tr := ufm.GetTestResultsFromWorkflowData(output[0])
+	require.Len(t, tr, 1)
+
+	findings, complete, findingsErr := tr[0].Findings(ctx)
+	require.NoError(t, findingsErr)
+	assert.True(t, complete)
+	require.Len(t, findings, len(expectedFindings))
+	assert.Equal(t, expectedFindings[0].Attributes.Key, findings[0].Attributes.Key)
+	assert.Equal(t, expectedFindings[0].Attributes.Title, findings[0].Attributes.Title)
+
+	_, metaErr := output[0].GetMetaData(ProjectPageLink)
+	assert.Error(t, metaErr, "project-page-link should not be set when report is false")
+}
+
+func TestPrepareOutput_NoReport_ReturnsOutputWithoutProjectPageLink(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	cmd := &Command{
+		Logger:       &logger,
+		ReportConfig: ReportConfig{Report: false},
+	}
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+	_, metaErr := output[0].GetMetaData(ProjectPageLink)
+	assert.Error(t, metaErr, "project-page-link should not be set when report is false")
+}
+
+func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	pageURL := "https://app.snyk.io/org/my-org/project"
+	cmd := &Command{
+		Logger: &logger,
+		ReportConfig: ReportConfig{
+			Report:         true,
+			ProjectPageURL: &pageURL,
+		},
+	}
+
+	projectID := uuid.New()
+	findingsJSON := fmt.Sprintf(`[{"relationships":{"project":{"data":{"id":%q,"type":"project"}}}}]`, projectID)
+	var findings []testapi.FindingData
+	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+
+	link, metaErr := output[0].GetMetaData(ProjectPageLink)
+	require.NoError(t, metaErr)
+	assert.Equal(t, "https://app.snyk.io/org/my-org/project/"+projectID.String(), link)
+}
+
+func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	pageURL := "https://app.snyk.io/org/my-org/project"
+	cmd := &Command{
+		Logger: &logger,
+		ReportConfig: ReportConfig{
+			Report:         true,
+			ProjectPageURL: &pageURL,
+		},
+	}
+
+	findingsWithoutProject := []testapi.FindingData{
+		{Relationships: nil},
+	}
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findingsWithoutProject, true, nil).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+	_, metaErr := output[0].GetMetaData(ProjectPageLink)
+	assert.Error(t, metaErr, "project-page-link should not be set when project ID is missing")
+}
+
+func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	cmd := &Command{
+		Logger: &logger,
+		ReportConfig: ReportConfig{
+			Report:         true,
+			ProjectPageURL: nil,
+		},
+	}
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	require.NotEmpty(t, output)
+	_, metaErr := output[0].GetMetaData(ProjectPageLink)
+	assert.Error(t, metaErr, "project-page-link should not be set when ProjectPageURL is nil")
+}
+
+func TestPrepareOutput_NilInvocationContext_ReturnsError(t *testing.T) {
+	logger := zerolog.Nop()
+	cmd := &Command{
+		Logger:       &logger,
+		ReportConfig: ReportConfig{Report: false},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+
+	_, err := cmd.prepareOutput(t.Context(), mockTestResult)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invocation context is nil")
+}
+
+func TestPrepareOutput_ReportWithProjectPageURL_FindingsError_NoLink(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	pageURL := "https://app.snyk.io/org/my-org/project"
+	cmd := &Command{
+		Logger: &logger,
+		ReportConfig: ReportConfig{
+			Report:         true,
+			ProjectPageURL: &pageURL,
+		},
+	}
+
+	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("findings fetch failed")).AnyTimes()
+
+	output, err := cmd.prepareOutput(ctx, mockTestResult)
+
+	require.NoError(t, err)
+	for _, d := range output {
+		_, metaErr := d.GetMetaData(ProjectPageLink)
+		assert.Error(t, metaErr, "project-page-link should not be set when findings retrieval fails")
+	}
+}
+
+func TestRetrieveProjectID_FindingsWithProjectID_ReturnsID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	expectedID := uuid.New()
+
+	findingsJSON := fmt.Sprintf(`[{"relationships":{"project":{"data":{"id":%q,"type":"project"}}}}]`, expectedID)
+	var findings []testapi.FindingData
+	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	require.NotNil(t, result)
+	assert.Equal(t, expectedID, *result)
+}
+
+func TestRetrieveProjectID_FindingsError_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("fetch failed"))
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result)
+}
+
+func TestRetrieveProjectID_EmptyFindings_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result)
+}
+
+func TestRetrieveProjectID_IncompleteFindings_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+
+	findingsJSON := `[{"relationships":{"project":{"data":{"id":"` + uuid.New().String() + `","type":"project"}}}}]`
+	var findings []testapi.FindingData
+	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, false, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result)
+}
+
+func TestRetrieveProjectID_NilRelationships_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+	findings := []testapi.FindingData{{Relationships: nil}}
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result)
+}
+
+func TestRetrieveProjectID_NilProjectData_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+
+	findingsJSON := `[{"relationships":{"project":{}}}]`
+	var findings []testapi.FindingData
+	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result)
+}
+
+func TestRetrieveProjectID_NilUUID_ReturnsNil(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	logger := zerolog.Nop()
+
+	findingsJSON := `[{"relationships":{"project":{"data":{"id":"00000000-0000-0000-0000-000000000000","type":"project"}}}}]`
+	var findings []testapi.FindingData
+	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+
+	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+
+	assert.Nil(t, result, "uuid.Nil should be treated as missing project ID")
+}
+
 func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -599,4 +933,25 @@ func requireCatalogError(t *testing.T, err error) snyk_errors.Error {
 		t.Fatalf("Expected a snyk_errors.Error, but got: %T (%v)", err, err)
 	}
 	return catalogErr
+}
+
+// setupMockTestResultForPrepareOutput sets the minimum mock expectations needed
+// by ufm.CreateWorkflowDataFromTestResults used in command.prepareOutput.
+func setupMockTestResultForPrepareOutput(m *gafclientmocks.MockTestResult) {
+	testID := uuid.New()
+	m.EXPECT().GetTestID().Return(&testID).AnyTimes()
+	m.EXPECT().GetTestConfiguration().Return(&testapi.TestConfiguration{}).AnyTimes()
+	m.EXPECT().GetCreatedAt().Return(&time.Time{}).AnyTimes()
+	m.EXPECT().GetTestSubject().Return(&testapi.TestSubject{}).AnyTimes()
+	m.EXPECT().GetSubjectLocators().Return(&[]testapi.TestSubjectLocator{}).AnyTimes()
+	m.EXPECT().GetErrors().Return(&[]testapi.IoSnykApiCommonError{}).AnyTimes()
+	m.EXPECT().GetWarnings().Return(&[]testapi.IoSnykApiCommonError{}).AnyTimes()
+	m.EXPECT().GetPassFail().Return(nil).AnyTimes()
+	m.EXPECT().GetOutcomeReason().Return(nil).AnyTimes()
+	m.EXPECT().GetBreachedPolicies().Return(nil).AnyTimes()
+	m.EXPECT().GetEffectiveSummary().Return(nil).AnyTimes()
+	m.EXPECT().GetRawSummary().Return(nil).AnyTimes()
+	m.EXPECT().GetTestFacts().Return(nil).AnyTimes()
+	m.EXPECT().GetMetadata().Return(make(map[string]interface{})).AnyTimes()
+	m.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
 }

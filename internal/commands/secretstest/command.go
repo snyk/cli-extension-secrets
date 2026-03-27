@@ -4,10 +4,13 @@ package secretstest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
@@ -24,6 +27,7 @@ import (
 const (
 	FilterAndUploadFilesTimeout = 30 * time.Second
 	LogFieldCount               = "count"
+	ProjectPageLink             = "project-page-link"
 )
 
 // ReportConfig holds the configuration for the --report flag and related project attributes.
@@ -35,6 +39,7 @@ type ReportConfig struct {
 	ProjectBusinessCriticality string
 	ProjectEnvironment         string
 	ProjectLifecycle           string
+	ProjectPageURL             *string
 }
 
 // CommandArgs holds the arguments required to construct a Command.
@@ -145,7 +150,7 @@ func (c *Command) RunWorkflow(
 	}
 
 	c.UserInterface.SetTitle(TitleRetrievingResults)
-	output, err := prepareOutput(ctx, testResult)
+	output, err := c.prepareOutput(ctx, testResult)
 	if err != nil {
 		return nil, c.ErrorFactory.NewPrepareOutputError(err)
 	}
@@ -266,7 +271,7 @@ func buildScmContext(repoURL, branch, commitRef string) *testapi.ScmContext {
 	return scmCtx
 }
 
-func prepareOutput(
+func (c *Command) prepareOutput(
 	ctx context.Context,
 	testResult testapi.TestResult,
 ) ([]workflow.Data, error) {
@@ -279,6 +284,17 @@ func prepareOutput(
 	testResultData := ufm.CreateWorkflowDataFromTestResults(
 		ictx.GetWorkflowIdentifier(),
 		[]testapi.TestResult{testResult})
+
+	if c.ReportConfig.Report && c.ReportConfig.ProjectPageURL != nil {
+		projectID := retrieveProjectID(ctx, testResult, c.Logger)
+		if projectID != nil {
+			projectPageURL, err := url.JoinPath(*c.ReportConfig.ProjectPageURL, projectID.String())
+			if err == nil {
+				c.Logger.Info().Msgf("Project page URL: %s", projectPageURL)
+				testResultData.SetMetaData(ProjectPageLink, projectPageURL)
+			}
+		}
+	}
 
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)
@@ -376,4 +392,21 @@ func buildTestConfiguration(rc *ReportConfig, severityThreshold string) *testapi
 	}
 
 	return cfg
+}
+
+func retrieveProjectID(ctx context.Context, testResult testapi.TestResult, logger *zerolog.Logger) *uuid.UUID {
+	findings, complete, err := testResult.Findings(ctx)
+	if err != nil || !complete || len(findings) == 0 {
+		logger.Warn().Msg("Unable to retrieve project ID from findings")
+		return nil
+	}
+
+	rel := findings[0].Relationships
+	if rel == nil || rel.Project == nil || rel.Project.Data == nil || rel.Project.Data.Id == uuid.Nil {
+		logger.Warn().Msg("Unable to retrieve project ID from findings relationships")
+		return nil
+	}
+
+	id := rel.Project.Data.Id
+	return &id
 }
