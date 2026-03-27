@@ -1,3 +1,4 @@
+// Package main is the entry point for the cli-extension-secrets.
 package main
 
 import (

@@ -22,7 +22,7 @@ SHELL:=env PATH=$(GO_BIN):$(NODE_BIN):$(PYTHON_PATH)/bin:$(PATH) $(SHELL)
 # Tooling versions as served by CircleCI cimg/go convenience image
 # https://github.com/CircleCI-Public/cimg-go/blob/main/1.23/Dockerfile#L27-L28
 GOTESTSUM_V?=1.12.0
-GOCI_LINT_V?=v1.64.8
+GOCI_LINT_V?=v2.11.3
 PRE_COMMIT_V?=v3.8
 
 .DEFAULT_GOAL:=help
@@ -66,7 +66,7 @@ lint: lint-go lint-secrets ## Run all linters
 lint-go: ## Run golangci linters
 ifdef CI
 	mkdir -p test/results
-	golangci-lint run --out-format junit-xml ./... > test/results/lint-tests.xml
+	golangci-lint run --output.junit-xml.path=test/results/lint-tests.xml ./...
 else
 	golangci-lint run -v ./...
 endif

@@ -1,3 +1,4 @@
+// Package secretstest implements the Snyk secrets test workflow.
 package secretstest
 
 import (
@@ -19,11 +20,13 @@ import (
 	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
 )
 
+// Secrets workflow constants.
 const (
 	FilterAndUploadFilesTimeout = 30 * time.Second
 	LogFieldCount               = "count"
 )
 
+// ReportConfig holds the configuration for the --report flag and related project attributes.
 type ReportConfig struct {
 	Report                     bool
 	TargetName                 string
@@ -34,6 +37,7 @@ type ReportConfig struct {
 	ProjectLifecycle           string
 }
 
+// CommandArgs holds the arguments required to construct a Command.
 type CommandArgs struct {
 	InvocationContext workflow.InvocationContext
 	UserInterface     *CLIUserInterface
@@ -49,6 +53,7 @@ type CommandArgs struct {
 	ReportConfig      ReportConfig
 }
 
+// Command orchestrates file upload, scanning, and output preparation for secrets testing.
 type Command struct {
 	Logger            *zerolog.Logger
 	OrgID             string
@@ -66,11 +71,13 @@ type Command struct {
 
 type newClientsFunc func(workflow.InvocationContext, string) (*WorkflowClients, error)
 
+// WorkflowClients groups the API clients used during the secrets workflow.
 type WorkflowClients struct {
 	TestAPIShim testshim.Client
 	FileUpload  upload.Client
 }
 
+// NewWorkflowClients creates the API clients needed for the secrets workflow.
 func NewWorkflowClients(ictx workflow.InvocationContext, orgID string) (*WorkflowClients, error) {
 	uploadClient, err := upload.NewClient(ictx, orgID)
 	if err != nil {
@@ -88,6 +95,7 @@ func NewWorkflowClients(ictx workflow.InvocationContext, orgID string) (*Workflo
 	}, nil
 }
 
+// NewCommand constructs a Command from the provided arguments.
 func NewCommand(args *CommandArgs) (*Command, error) {
 	if args == nil {
 		return nil, fmt.Errorf("args is nil")
@@ -118,6 +126,7 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 	}, nil
 }
 
+// RunWorkflow uploads files, triggers a scan, and returns the formatted results.
 func (c *Command) RunWorkflow(
 	ctx context.Context,
 	inputPath string,

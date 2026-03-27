@@ -233,7 +233,7 @@ func parseExcludeFlag(config configuration.Configuration) ([]string, error) {
 
 	rawExcludeFlag := strings.TrimSpace(config.GetString(FlagExcludeFilePath))
 	if rawExcludeFlag == "" {
-		return nil, errors.New("Empty --exclude argument. Did you mean --exclude=subdirectory?")
+		return nil, cli_errors.NewValidationFailureError("Empty --exclude argument. Did you mean --exclude=subdirectory?")
 	}
 
 	excludeGlobs, err := ff.ExpandExcludeNames(strings.Split(rawExcludeFlag, ","))

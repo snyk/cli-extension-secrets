@@ -13,13 +13,16 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// Workflow configuration keys.
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
 	InputPathKey                = "inputPath"
 )
 
+// WorkflowID is the unique identifier for the secrets test workflow.
 var WorkflowID = workflow.NewWorkflowIdentifier("secrets.test")
 
+// RegisterWorkflows registers the secrets test workflow and its feature flag with the engine.
 func RegisterWorkflows(e workflow.Engine) error {
 	flagSet := GetSecretsTestFlagSet()
 
@@ -34,6 +37,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 	return nil
 }
 
+// SecretsWorkflow is the entry point for the secrets test workflow.
 func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,

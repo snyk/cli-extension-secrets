@@ -1,3 +1,4 @@
+// Package testshim provides a client for the Snyk test shim API.
 package testshim
 
 import (
@@ -17,10 +18,12 @@ type Client interface {
 	StartTest(ctx context.Context, params testapi.StartTestParams) (testapi.TestHandle, error)
 }
 
+// TestAPIClient wraps the test shim API client.
 type TestAPIClient struct {
 	testapi.TestClient
 }
 
+// NewClient creates a new TestAPIClient from the given invocation context.
 func NewClient(ictx workflow.InvocationContext) (*TestAPIClient, error) {
 	config := ictx.GetConfiguration()
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()

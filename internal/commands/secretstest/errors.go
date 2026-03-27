@@ -12,6 +12,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 )
 
+// User-facing error messages.
 const (
 	UnableToInitializeMsg = "Unable to initialize command."
 	UnexpectedErrorMsg    = "An unexpected error occurred."
@@ -35,42 +36,52 @@ func NewErrorFactory(logger *zerolog.Logger) *ErrorFactory {
 	}
 }
 
+// NewRevisionError wraps an upload revision creation failure.
 func (ef *ErrorFactory) NewRevisionError(err error) error {
 	return ef.ensureCatalogError(err, "error creating upload revision")
 }
 
+// NewExecuteTestError wraps a test execution failure.
 func (ef *ErrorFactory) NewExecuteTestError(err error) error {
 	return ef.ensureCatalogError(err, "error executing test")
 }
 
+// NewTestResourceError wraps a test resource creation failure.
 func (ef *ErrorFactory) NewTestResourceError(err error) error {
 	return ef.ensureCatalogError(err, "error creating test resource")
 }
 
+// NewPrepareOutputError wraps an output preparation failure.
 func (ef *ErrorFactory) NewPrepareOutputError(err error) error {
 	return ef.ensureCatalogError(err, "failed to prepare output")
 }
 
+// NewGeneralSecretsFailureError wraps a generic secrets workflow failure.
 func (ef *ErrorFactory) NewGeneralSecretsFailureError(err error, msg string) error {
 	return ef.ensureCatalogError(err, msg)
 }
 
+// NewFeatureNotEnabledError returns an error indicating the feature flag is disabled.
 func (ef *ErrorFactory) NewFeatureNotEnabledError(msg string) error {
 	return cli_errors.NewFeatureNotEnabledError(msg)
 }
 
+// NewFeatureUnderDevelopmentError returns an error indicating the feature is not yet available.
 func (ef *ErrorFactory) NewFeatureUnderDevelopmentError(msg string) error {
 	return cli_errors.NewFeatureUnderDevelopmentError(msg)
 }
 
+// NewValidationFailureError returns an error for invalid user input.
 func (ef *ErrorFactory) NewValidationFailureError(msg string) error {
 	return cli_errors.NewValidationFailureError(msg)
 }
 
+// NewInvalidFlagError returns an error for an unrecognized or invalid CLI flag.
 func (ef *ErrorFactory) NewInvalidFlagError(err error) error {
 	return cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
 }
 
+// NewUploadError maps file-upload errors to the appropriate catalog error type.
 func (ef *ErrorFactory) NewUploadError(err error) error {
 	if err == nil {
 		return nil

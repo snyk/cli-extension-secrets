@@ -28,6 +28,8 @@ type textFileOnly struct {
 	logger *zerolog.Logger
 }
 
+// TextFileOnlyFilter returns a filter that drops binary files based on a null-byte heuristic.
+//
 //nolint:ireturn // Returns interface because implementation is private
 func TextFileOnlyFilter(logger *zerolog.Logger) FileFilter {
 	return &textFileOnly{
@@ -46,7 +48,7 @@ func (f *textFileOnly) FilterOut(path string) bool {
 	return !IsTextContent(header)
 }
 
-// No metrics to record for text file.
+// RecordMetrics No metrics to record for text file.
 func (f *textFileOnly) RecordMetrics(_ Analytics) {}
 
 // IsTextContent determines if the data slice contains text content

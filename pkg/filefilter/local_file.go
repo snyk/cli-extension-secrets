@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
+// ReadFileHeader reads up to n bytes from the beginning of the file at path.
 func ReadFileHeader(path string, n int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}

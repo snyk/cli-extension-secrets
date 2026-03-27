@@ -1,3 +1,4 @@
+// Package cmdctx manages context values for the secrets command workflow.
 package cmdctx
 
 import (
@@ -51,8 +52,8 @@ func WithProgressBar(ctx context.Context, progressBar ui.ProgressBar) context.Co
 }
 
 // WithInstrumentation adds instrumentation to the current context.
-func WithInstrumentation(ctx context.Context, instrumentation instrumentation.Instrumentation) context.Context {
-	return context.WithValue(ctx, InstrumentationKey, instrumentation)
+func WithInstrumentation(ctx context.Context, i instrumentation.Instrumentation) context.Context {
+	return context.WithValue(ctx, InstrumentationKey, i)
 }
 
 // Ictx will retrieve the invocation context from the command context.
@@ -112,8 +113,8 @@ func ProgressBar(ctx context.Context) ui.ProgressBar {
 //
 //nolint:ireturn // Returns interface because implementation is private
 func Instrumentation(ctx context.Context) instrumentation.Instrumentation {
-	if instrumentation, ok := ctx.Value(InstrumentationKey).(instrumentation.Instrumentation); ok {
-		return instrumentation
+	if i, ok := ctx.Value(InstrumentationKey).(instrumentation.Instrumentation); ok {
+		return i
 	}
 	return nil
 }

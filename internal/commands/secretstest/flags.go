@@ -2,6 +2,7 @@ package secretstest
 
 import "github.com/spf13/pflag"
 
+// CLI flag names for the secrets test command.
 const (
 	FlagJSON                       = "json"
 	FlagSARIF                      = "sarif"
@@ -20,6 +21,7 @@ const (
 	FlagRemoteRepoURL              = "remote-repo-url"
 )
 
+// GetSecretsTestFlagSet returns the flag set for the secrets test command.
 func GetSecretsTestFlagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("snyk-cli-extension-secrets-test", pflag.ExitOnError)
 
