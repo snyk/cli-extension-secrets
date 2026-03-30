@@ -476,15 +476,12 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
+	mockTestResult.EXPECT().SetMetadata(ProjectPageLink, "https://app.snyk.io/org/my-org/project/"+projectID.String())
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
 
 	require.NoError(t, err)
 	require.NotEmpty(t, output)
-
-	link, metaErr := output[0].GetMetaData(ProjectPageLink)
-	require.NoError(t, metaErr)
-	assert.Equal(t, "https://app.snyk.io/org/my-org/project/"+projectID.String(), link)
 }
 
 func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T) {

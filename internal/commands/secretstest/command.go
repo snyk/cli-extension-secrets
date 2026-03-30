@@ -281,9 +281,6 @@ func (c *Command) prepareOutput(
 	if ictx == nil {
 		return nil, fmt.Errorf("invocation context is nil")
 	}
-	testResultData := ufm.CreateWorkflowDataFromTestResults(
-		ictx.GetWorkflowIdentifier(),
-		[]testapi.TestResult{testResult})
 
 	if c.ReportConfig.Report && c.ReportConfig.ProjectPageURL != nil {
 		projectID := retrieveProjectID(ctx, testResult, c.Logger)
@@ -291,10 +288,14 @@ func (c *Command) prepareOutput(
 			projectPageURL, err := url.JoinPath(*c.ReportConfig.ProjectPageURL, projectID.String())
 			if err == nil {
 				c.Logger.Info().Msgf("Project page URL: %s", projectPageURL)
-				testResultData.SetMetaData(ProjectPageLink, projectPageURL)
+				testResult.SetMetadata(ProjectPageLink, projectPageURL)
 			}
 		}
 	}
+
+	testResultData := ufm.CreateWorkflowDataFromTestResults(
+		ictx.GetWorkflowIdentifier(),
+		[]testapi.TestResult{testResult})
 
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)
