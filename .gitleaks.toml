@@ -13,4 +13,5 @@ paths = [
   'test/jwt/jwt_private_key.pem',
   'internal/clients/testshim/mocks/finding.json',
   'internal/commands/secretstest/testdata/mock_test_result.json',
+  'internal/commands/secretstest/testdata/finding.json'
 ]

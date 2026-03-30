@@ -3,6 +3,7 @@ package secretstest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"path/filepath"
 
 	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
@@ -128,6 +129,14 @@ func buildReportConfig(config configuration.Configuration) ReportConfig {
 	rc.ProjectBusinessCriticality = config.GetString(FlagProjectBusinessCriticality)
 	rc.ProjectEnvironment = config.GetString(FlagProjectEnvironment)
 	rc.ProjectLifecycle = config.GetString(FlagProjectLifecycle)
+
+	orgName := config.GetString(configuration.ORGANIZATION_SLUG)
+	web := config.GetString(configuration.WEB_APP_URL)
+	if orgName != "" && web != "" {
+		if projectPageURL, err := url.JoinPath(web, "org", orgName, "project"); err == nil {
+			rc.ProjectPageURL = &projectPageURL
+		}
+	}
 
 	return rc
 }
