@@ -1,3 +1,4 @@
+//nolint:gosec // testing credential stripping with mock secrets
 package secretstest
 
 import (
@@ -374,6 +375,62 @@ func TestFindRepoURLWithOverride(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedRepoURL, repoURL)
 			}
+		})
+	}
+}
+
+func TestSanitizeRepoURL(t *testing.T) {
+	tests := []struct {
+		raw      string
+		expected string
+	}{
+		// Standard parseable URLs
+		{
+			raw:      "https://github.com/snyk/repo.git",
+			expected: "https://github.com/snyk/repo.git",
+		},
+		{
+			raw:      "https://github.com/org/repo.git",
+			expected: "https://github.com/org/repo.git",
+		},
+		// URLs with credentials (implicitly stripped)
+		{
+			raw:      "https://user:password@github.com/snyk/repo.git",
+			expected: "https://github.com/snyk/repo.git",
+		},
+		{
+			raw:      "https://user:token@github.com/org/repo.git",
+			expected: "https://github.com/org/repo.git",
+		},
+		{
+			raw:      "https://oauth2:glpat-123456@gitlab.com/group/repo.git",
+			expected: "https://gitlab.com/group/repo.git",
+		},
+		// HTTP URLs are upgraded to HTTPS
+		{
+			raw:      "http://user:pass@gitea.local/snyk/repo.git",
+			expected: "https://gitea.local/snyk/repo.git",
+		},
+		// SCP-like URLs
+		{
+			raw:      "git@github.com:org/repo.git",
+			expected: "https://github.com/org/repo.git",
+		},
+		{
+			raw:      "git@github.com:22:org/repo.git",
+			expected: "https://github.com:22/org/repo.git",
+		},
+		// Invalid URLs fall back to the original raw string
+		{
+			raw:      "://invalid-url",
+			expected: "://invalid-url",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.raw, func(t *testing.T) {
+			sanitized := sanitizeRepoURL(test.raw)
+			require.Equal(t, test.expected, sanitized)
 		})
 	}
 }
