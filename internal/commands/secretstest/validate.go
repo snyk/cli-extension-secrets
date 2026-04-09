@@ -3,13 +3,23 @@ package secretstest
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
+)
+
+// Validation limits for user input.
+const (
+	MaxTargetNameLength      = 256
+	MaxTargetReferenceLength = 256
+	MaxFileOutputPathLength  = 4096
 )
 
 var (
@@ -96,7 +106,12 @@ func validateFlagsConfig(config configuration.Configuration) error {
 			return err
 		}
 	}
-	return nil
+
+	if err := validateRemoteRepoURL(config); err != nil {
+		return err
+	}
+
+	return validateFileOutputPaths(config)
 }
 
 /*
@@ -136,7 +151,11 @@ func validateReportConfig(config configuration.Configuration) error {
 		}
 	}
 
-	return validateTags(config)
+	if err := validateTags(config); err != nil {
+		return err
+	}
+
+	return validateStringLengthLimits(config)
 }
 
 func validateFlagsWithoutReportConfig(config configuration.Configuration) error {
@@ -252,4 +271,122 @@ func getKeys(m map[string]struct{}) []string {
 	}
 
 	return keys
+}
+
+func validateRemoteRepoURL(config configuration.Configuration) error {
+	if !config.IsSet(FlagRemoteRepoURL) {
+		return nil
+	}
+
+	rawURL := strings.TrimSpace(config.GetString(FlagRemoteRepoURL))
+	if rawURL == "" {
+		return nil
+	}
+
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		errMsg := fmt.Sprintf("Invalid --%s: %s", FlagRemoteRepoURL, err.Error())
+		return errors.New(errMsg)
+	}
+
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		errMsg := fmt.Sprintf("Invalid --%s: URL must include scheme (e.g., https://) and host", FlagRemoteRepoURL)
+		return errors.New(errMsg)
+	}
+
+	allowedSchemes := map[string]struct{}{"http": {}, "https": {}, "git": {}, "ssh": {}}
+	if _, ok := allowedSchemes[strings.ToLower(parsedURL.Scheme)]; !ok {
+		errMsg := fmt.Sprintf("Invalid --%s: scheme must be one of http, https, git, or ssh", FlagRemoteRepoURL)
+		return errors.New(errMsg)
+	}
+
+	return nil
+}
+
+func validateStringLengthLimits(config configuration.Configuration) error {
+	if config.IsSet(FlagTargetName) {
+		value := config.GetString(FlagTargetName)
+		if utf8.RuneCountInString(value) > MaxTargetNameLength {
+			errMsg := fmt.Sprintf("Invalid --%s: exceeds maximum length of %d characters", FlagTargetName, MaxTargetNameLength)
+			return errors.New(errMsg)
+		}
+	}
+
+	if config.IsSet(FlagTargetReference) {
+		value := config.GetString(FlagTargetReference)
+		if utf8.RuneCountInString(value) > MaxTargetReferenceLength {
+			errMsg := fmt.Sprintf("Invalid --%s: exceeds maximum length of %d characters", FlagTargetReference, MaxTargetReferenceLength)
+			return errors.New(errMsg)
+		}
+	}
+
+	return nil
+}
+
+func validateFileOutputPaths(config configuration.Configuration) error {
+	outputFlags := []string{FlagJSONFileOutput, FlagSARIFFileOutput}
+
+	for _, flagName := range outputFlags {
+		if !config.IsSet(flagName) {
+			continue
+		}
+
+		rawPath := config.GetString(flagName)
+		if rawPath == "" {
+			continue
+		}
+
+		if utf8.RuneCountInString(rawPath) > MaxFileOutputPathLength {
+			errMsg := fmt.Sprintf("Invalid --%s: path exceeds maximum length of %d characters", flagName, MaxFileOutputPathLength)
+			return errors.New(errMsg)
+		}
+
+		if strings.ContainsAny(rawPath, "\x00") {
+			errMsg := fmt.Sprintf("Invalid --%s: path contains invalid characters", flagName)
+			return errors.New(errMsg)
+		}
+
+		if err := validateOutputPathSafety(rawPath, flagName); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func validateOutputPathSafety(rawPath, flagName string) error {
+	absPath, err := filepath.Abs(rawPath)
+	if err != nil {
+		errMsg := fmt.Sprintf("Invalid --%s: cannot resolve path", flagName)
+		return errors.New(errMsg)
+	}
+
+	parentDir := filepath.Dir(absPath)
+	info, statErr := os.Stat(parentDir)
+	if statErr != nil {
+		if os.IsNotExist(statErr) {
+			return nil
+		}
+		errMsg := fmt.Sprintf("Invalid --%s: cannot access parent directory", flagName)
+		return errors.New(errMsg)
+	}
+
+	if !info.IsDir() {
+		errMsg := fmt.Sprintf("Invalid --%s: parent path is not a directory", flagName)
+		return errors.New(errMsg)
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		realParent, err := filepath.EvalSymlinks(parentDir)
+		if err != nil {
+			errMsg := fmt.Sprintf("Invalid --%s: cannot resolve symlinks in path", flagName)
+			return errors.New(errMsg)
+		}
+		if strings.Contains(realParent, "..") {
+			errMsg := fmt.Sprintf("Invalid --%s: symlink resolves to path with traversal", flagName)
+			return errors.New(errMsg)
+		}
+	}
+
+	return nil
 }
