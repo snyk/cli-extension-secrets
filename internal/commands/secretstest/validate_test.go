@@ -1,6 +1,7 @@
 package secretstest
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
@@ -432,4 +433,243 @@ func setupMockConfig(flagValues map[string]any) configuration.Configuration {
 		config.Set(key, value)
 	}
 	return config
+}
+
+func TestValidateRemoteRepoURL(t *testing.T) {
+	testCases := []struct {
+		in     map[string]any
+		hasErr bool
+		desc   string
+	}{
+		{
+			in:     map[string]any{},
+			hasErr: false,
+			desc:   "no --remote-repo-url set, no validation needed",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "",
+			},
+			hasErr: false,
+			desc:   "empty --remote-repo-url is valid",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "https://github.com/snyk/cli-extension-secrets",
+			},
+			hasErr: false,
+			desc:   "valid https URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "http://github.com/snyk/cli-extension-secrets",
+			},
+			hasErr: false,
+			desc:   "valid http URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "git://github.com/snyk/cli-extension-secrets.git",
+			},
+			hasErr: false,
+			desc:   "valid git URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "ssh://git@github.com/snyk/cli-extension-secrets.git",
+			},
+			hasErr: false,
+			desc:   "valid ssh URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "invalid-url",
+			},
+			hasErr: true,
+			desc:   "invalid URL without scheme",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "ftp://github.com/snyk/cli-extension-secrets",
+			},
+			hasErr: true,
+			desc:   "invalid URL with unsupported scheme",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "javascript:alert(1)",
+			},
+			hasErr: true,
+			desc:   "invalid URL with javascript scheme",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "file:///etc/passwd",
+			},
+			hasErr: true,
+			desc:   "invalid URL with file scheme",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := setupMockConfig(tc.in)
+
+			err := validateRemoteRepoURL(config)
+			if tc.hasErr {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateStringLengthLimits(t *testing.T) {
+	longString := strings.Repeat("a", MaxTargetNameLength+1)
+
+	testCases := []struct {
+		in     map[string]any
+		hasErr bool
+		desc   string
+	}{
+		{
+			in:     map[string]any{},
+			hasErr: false,
+			desc:   "no flags set, no validation needed",
+		},
+		{
+			in: map[string]any{
+				FlagTargetName: "valid-name",
+			},
+			hasErr: false,
+			desc:   "valid --target-name length",
+		},
+		{
+			in: map[string]any{
+				FlagTargetName: longString,
+			},
+			hasErr: true,
+			desc:   "invalid --target-name exceeds max length",
+		},
+		{
+			in: map[string]any{
+				FlagTargetReference: "main",
+			},
+			hasErr: false,
+			desc:   "valid --target-reference length",
+		},
+		{
+			in: map[string]any{
+				FlagTargetReference: longString,
+			},
+			hasErr: true,
+			desc:   "invalid --target-reference exceeds max length",
+		},
+		{
+			in: map[string]any{
+				FlagTargetName: strings.Repeat("a", MaxTargetNameLength),
+			},
+			hasErr: false,
+			desc:   "valid --target-name at exactly max length",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := setupMockConfig(tc.in)
+
+			err := validateStringLengthLimits(config)
+			if tc.hasErr {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateFileOutputPaths(t *testing.T) {
+	longPath := strings.Repeat("a", MaxFileOutputPathLength+1) + ".json"
+
+	testCases := []struct {
+		in     map[string]any
+		hasErr bool
+		desc   string
+	}{
+		{
+			in:     map[string]any{},
+			hasErr: false,
+			desc:   "no flags set, no validation needed",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: "",
+			},
+			hasErr: false,
+			desc:   "empty --json-file-output is valid",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: "/tmp/output.json",
+			},
+			hasErr: false,
+			desc:   "valid --json-file-output path",
+		},
+		{
+			in: map[string]any{
+				FlagSARIFFileOutput: "/tmp/output.sarif",
+			},
+			hasErr: false,
+			desc:   "valid --sarif-file-output path",
+		},
+		{
+			in: map[string]any{
+				FlagSARIFFileOutput: "/tmp/output.json",
+			},
+			hasErr: false,
+			desc:   "valid --sarif-file-output with .json extension",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: longPath,
+			},
+			hasErr: true,
+			desc:   "invalid --json-file-output exceeds max length",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: "output\x00.json",
+			},
+			hasErr: true,
+			desc:   "invalid --json-file-output with null byte",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: "./output.json",
+			},
+			hasErr: false,
+			desc:   "valid --json-file-output with relative path",
+		},
+		{
+			in: map[string]any{
+				FlagJSONFileOutput: "/nonexistent_dir_12345/output.json",
+			},
+			hasErr: false,
+			desc:   "valid --json-file-output with non-existent parent dir (deferred check)",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := setupMockConfig(tc.in)
+
+			err := validateFileOutputPaths(config)
+			if tc.hasErr {
+				assert.NotNil(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
 }
