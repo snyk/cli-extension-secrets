@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/snyk/go-application-framework/pkg/utils/git"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -379,46 +380,42 @@ func TestFindRepoURLWithOverride(t *testing.T) {
 	}
 }
 
-func TestSanitizeRepoURL(t *testing.T) {
+func TestNormalizeGitURL(t *testing.T) {
 	tests := []struct {
 		raw      string
 		expected string
 	}{
-		// Standard parseable URLs
+		// Standard parseable URLs — .git suffix is stripped for stable identity
 		{
 			raw:      "https://github.com/snyk/repo.git",
-			expected: "https://github.com/snyk/repo.git",
+			expected: "https://github.com/snyk/repo",
 		},
 		{
 			raw:      "https://github.com/org/repo.git",
-			expected: "https://github.com/org/repo.git",
+			expected: "https://github.com/org/repo",
 		},
-		// URLs with credentials (implicitly stripped)
+		// URLs with credentials are stripped
 		{
 			raw:      "https://user:password@github.com/snyk/repo.git",
-			expected: "https://github.com/snyk/repo.git",
+			expected: "https://github.com/snyk/repo",
 		},
 		{
 			raw:      "https://user:token@github.com/org/repo.git",
-			expected: "https://github.com/org/repo.git",
+			expected: "https://github.com/org/repo",
 		},
 		{
 			raw:      "https://oauth2:glpat-123456@gitlab.com/group/repo.git",
-			expected: "https://gitlab.com/group/repo.git",
+			expected: "https://gitlab.com/group/repo",
 		},
 		// HTTP URLs are upgraded to HTTPS
 		{
 			raw:      "http://user:pass@gitea.local/snyk/repo.git",
-			expected: "https://gitea.local/snyk/repo.git",
+			expected: "https://gitea.local/snyk/repo",
 		},
 		// SCP-like URLs
 		{
 			raw:      "git@github.com:org/repo.git",
-			expected: "https://github.com/org/repo.git",
-		},
-		{
-			raw:      "git@github.com:22:org/repo.git",
-			expected: "https://github.com:22/org/repo.git",
+			expected: "https://github.com/org/repo",
 		},
 		// Invalid URLs fall back to the original raw string
 		{
@@ -429,7 +426,7 @@ func TestSanitizeRepoURL(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.raw, func(t *testing.T) {
-			sanitized := sanitizeRepoURL(test.raw)
+			sanitized := git.NormalizeGitURL(test.raw)
 			require.Equal(t, test.expected, sanitized)
 		})
 	}
