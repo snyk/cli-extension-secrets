@@ -483,10 +483,80 @@ func TestValidateRemoteRepoURL(t *testing.T) {
 		},
 		{
 			in: map[string]any{
+				FlagRemoteRepoURL: "git@github.com:snyk/cli-extension-secrets.git",
+			},
+			hasErr: false,
+			desc:   "valid SCP-style git URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "git@gitlab.com:org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid SCP-style gitlab URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "user@bitbucket.org:team/project.git",
+			},
+			hasErr: false,
+			desc:   "valid SCP-style bitbucket URL",
+		},
+		{
+			in: map[string]any{
 				FlagRemoteRepoURL: "invalid-url",
 			},
 			hasErr: true,
-			desc:   "invalid URL without scheme",
+			desc:   "invalid URL without scheme or host",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "git+ssh://git@github.com/org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid git+ssh URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "ssh+git://git@github.com/org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid ssh+git URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "file:///home/user/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid file URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "https://github.com:8443/org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid https URL with port",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "ssh://git@github.com:22/org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid ssh URL with port",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "git@gitlab.com:org/subgroup/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid SCP-style gitlab subgroup URL",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "TOKEN@host:org/repo.git",
+			},
+			hasErr: false,
+			desc:   "valid SCP-style with token user",
 		},
 		{
 			in: map[string]any{
@@ -504,10 +574,24 @@ func TestValidateRemoteRepoURL(t *testing.T) {
 		},
 		{
 			in: map[string]any{
-				FlagRemoteRepoURL: "file:///etc/passwd",
+				FlagRemoteRepoURL: "-git@github.com:org/repo.git",
 			},
 			hasErr: true,
-			desc:   "invalid URL with file scheme",
+			desc:   "invalid SCP URL starting with dash",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: ":path/repo.git",
+			},
+			hasErr: true,
+			desc:   "invalid SCP URL with empty host",
+		},
+		{
+			in: map[string]any{
+				FlagRemoteRepoURL: "git@github.com:",
+			},
+			hasErr: true,
+			desc:   "invalid SCP URL with empty path",
 		},
 	}
 
