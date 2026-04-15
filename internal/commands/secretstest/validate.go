@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -283,24 +284,50 @@ func validateRemoteRepoURL(config configuration.Configuration) error {
 		return nil
 	}
 
+	if isValidGitURL(rawURL) {
+		return nil
+	}
+
+	errMsg := fmt.Sprintf("Invalid --%s: must be a valid git URL (e.g., https://github.com/org/repo.git or git@github.com:org/repo.git)", FlagRemoteRepoURL)
+	return errors.New(errMsg)
+}
+
+var scpURLRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9._-]*@[a-zA-Z0-9.-]+:[^/].*$`)
+
+func isValidGitURL(rawURL string) bool {
+	if scpURLRegexp.MatchString(rawURL) {
+		return true
+	}
+
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
-		errMsg := fmt.Sprintf("Invalid --%s: %s", FlagRemoteRepoURL, err.Error())
-		return errors.New(errMsg)
+		return false
 	}
 
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		errMsg := fmt.Sprintf("Invalid --%s: URL must include scheme (e.g., https://) and host", FlagRemoteRepoURL)
-		return errors.New(errMsg)
+	if parsedURL.Scheme == "" {
+		return false
 	}
 
-	allowedSchemes := map[string]struct{}{"http": {}, "https": {}, "git": {}, "ssh": {}}
-	if _, ok := allowedSchemes[strings.ToLower(parsedURL.Scheme)]; !ok {
-		errMsg := fmt.Sprintf("Invalid --%s: scheme must be one of http, https, git, or ssh", FlagRemoteRepoURL)
-		return errors.New(errMsg)
+	scheme := strings.ToLower(parsedURL.Scheme)
+
+	if scheme == "file" {
+		return parsedURL.Path != ""
 	}
 
-	return nil
+	if parsedURL.Host == "" {
+		return false
+	}
+
+	allowedSchemes := map[string]struct{}{
+		"http":    {},
+		"https":   {},
+		"git":     {},
+		"ssh":     {},
+		"git+ssh": {},
+		"ssh+git": {},
+	}
+	_, ok := allowedSchemes[scheme]
+	return ok
 }
 
 func validateStringLengthLimits(config configuration.Configuration) error {
