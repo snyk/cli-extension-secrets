@@ -203,4 +203,3 @@ func walkUpDirToGit(startPath string) (string, error) {
 
 	return "", fmt.Errorf("reached root without finding target")
 }
-
