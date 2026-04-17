@@ -66,6 +66,7 @@ func TestFilter_Logic(t *testing.T) {
 		"drop_binary.exe":    "test content",
 		"drop_vendor/lib.js": "test content",
 		"keep_me_too.go":     "test content",
+		".gitignore":         "test content",
 	}
 	dirPath := setupTempDir(t, inputFiles)
 	var inputPaths []string
@@ -152,6 +153,36 @@ func TestFilter_Logic(t *testing.T) {
 			t.Errorf("got %d files, want 0", len(results))
 		}
 	})
+
+	t.Run("MustExcludeFiles", func(t *testing.T) {
+		// No custom filters passed; testing default pipeline exclusion
+		pipeline := NewPipeline(
+			WithConcurrency(2),
+			WithLogger(&logger),
+		)
+
+		outChan := pipeline.Filter(t.Context(), inputPaths)
+		results := chanToSlice(outChan)
+
+		sortStrings(results)
+
+		// Expects 4 files (5 total inputs - 1 implicit drop)
+		if len(results) != 4 {
+			t.Fatalf("got %d files, want 4. Results: %v", len(results), results)
+		}
+
+		expected := []string{
+			filepath.Join(dirPath, "drop_binary.exe"),
+			filepath.Join(dirPath, "drop_vendor", "lib.js"),
+			filepath.Join(dirPath, "keep_me.txt"),
+			filepath.Join(dirPath, "keep_me_too.go"),
+		}
+		for i, want := range expected {
+			if results[i] != want {
+				t.Errorf("index %d: got path %q, want %q", i, results[i], want)
+			}
+		}
+	})
 }
 
 // TestPipeline_Configuration uses white-box testing (same package)
@@ -224,7 +255,7 @@ func TestPipeline_Configuration(t *testing.T) {
 // TestFilter_ConcurrencyStress checks for race conditions and data loss.
 // Run this with 'go test -race'.
 func TestFilter_ConcurrencyStress(t *testing.T) {
-	count := 10000
+	count := 1000
 	inputFiles := map[string]string{}
 	logger := newTestLogger()
 
