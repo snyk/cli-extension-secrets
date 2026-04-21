@@ -67,6 +67,7 @@ func TestFilter_Logic(t *testing.T) {
 		"drop_vendor/lib.js": "test content",
 		"keep_me_too.go":     "test content",
 		".gitignore":         "test content",
+		".gitleaksignore":    "test content",
 	}
 	dirPath := setupTempDir(t, inputFiles)
 	var inputPaths []string
@@ -166,7 +167,7 @@ func TestFilter_Logic(t *testing.T) {
 
 		sortStrings(results)
 
-		// Expects 4 files (5 total inputs - 1 implicit drop)
+		// Expects 4 files (6 total inputs - 2 implicit drop)
 		if len(results) != 4 {
 			t.Fatalf("got %d files, want 4. Results: %v", len(results), results)
 		}
