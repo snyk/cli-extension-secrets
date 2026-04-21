@@ -455,7 +455,8 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
-	pageURL := "https://app.snyk.io/org/my-org/project"
+	org := "my-org"
+	pageURL := newTestReportPageURL(org)
 	cmd := &Command{
 		Logger: &logger,
 		ReportConfig: ReportConfig{
@@ -476,7 +477,11 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
-	mockTestResult.EXPECT().SetMetadata(ProjectPageLink, "https://app.snyk.io/org/my-org/project/"+projectID.String())
+	projectBaseURL, joinErr := url.JoinPath(pageURL, projectID.String())
+	require.NoError(t, joinErr)
+	mockTestResult.EXPECT().SetMetadata(ProjectPageLink, projectBaseURL)
+	mockTestResult.EXPECT().SetMetadata(ReportURLMetadataKey, projectBaseURL)
+	mockTestResult.EXPECT().SetMetadata(ProjectIDMetadataKey, projectID.String())
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
 
@@ -489,7 +494,8 @@ func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T)
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
-	pageURL := "https://app.snyk.io/org/my-org/project"
+	org := "my-org"
+	pageURL := newTestReportPageURL(org)
 	cmd := &Command{
 		Logger: &logger,
 		ReportConfig: ReportConfig{
@@ -568,7 +574,8 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsError_NoLink(t *testing.
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
-	pageURL := "https://app.snyk.io/org/my-org/project"
+	org := "my-org"
+	pageURL := newTestReportPageURL(org)
 	cmd := &Command{
 		Logger: &logger,
 		ReportConfig: ReportConfig{
@@ -930,6 +937,10 @@ func requireCatalogError(t *testing.T, err error) snyk_errors.Error {
 		t.Fatalf("Expected a snyk_errors.Error, but got: %T (%v)", err, err)
 	}
 	return catalogErr
+}
+
+func newTestReportPageURL(org string) string {
+	return fmt.Sprintf("https://app.snyk.io/org/%s/project", org)
 }
 
 // setupMockTestResultForPrepareOutput sets the minimum mock expectations needed
