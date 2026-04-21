@@ -94,7 +94,6 @@ func TestStreamAllowedFiles(t *testing.T) {
 
 		// Assert
 		expected := []string{
-			".gitignore",
 			"main.go",
 			"src/utils.go",
 		}
