@@ -3,10 +3,8 @@ package secretstest
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -51,7 +49,7 @@ func resolveGitContext(
 		logger.Err(err).Str("remoteRepoURLFlag", remoteRepoURLOverride).Str(InputPathKey, inputPath).Msg("could not compute gitRoot or repoURL")
 	}
 
-	repoCtx.repoURL = sanitizeRepoURL(repoCtx.repoURL)
+	repoCtx.repoURL = git.NormalizeGitURL(repoCtx.repoURL)
 
 	repoCtx.branch, err = findBranchName(gitRootDir)
 	if err != nil {
@@ -204,17 +202,4 @@ func walkUpDirToGit(startPath string) (string, error) {
 	}
 
 	return "", fmt.Errorf("reached root without finding target")
-}
-
-var originRegexp = regexp.MustCompile(`^(.+@)?(.+):(.+)$`)
-
-func sanitizeRepoURL(raw string) string {
-	if u, err := url.Parse(raw); err == nil && (u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "ssh") {
-		return fmt.Sprintf("https://%s%s", u.Host, u.Path)
-	}
-
-	if match := originRegexp.FindStringSubmatch(raw); len(match) == 4 && match[2] != "" && match[3] != "" {
-		return fmt.Sprintf("https://%s/%s", match[2], match[3])
-	}
-	return raw
 }
