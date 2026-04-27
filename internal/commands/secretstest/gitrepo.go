@@ -46,7 +46,7 @@ func resolveGitContext(
 
 	repoCtx.repoURL, err = findRepoURLWithOverride(gitRootDir, remoteRepoURLOverride)
 	if err != nil {
-		logger.Err(err).Str("remoteRepoURLFlag", remoteRepoURLOverride).Str(InputPathKey, inputPath).Msg("could not compute gitRoot or repoURL")
+		logger.Err(err).Str(InputPathKey, inputPath).Msg("could not compute gitRoot or repoURL")
 	}
 
 	repoCtx.repoURL = git.NormalizeGitURL(repoCtx.repoURL)

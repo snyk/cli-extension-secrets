@@ -136,8 +136,6 @@ func (c *Command) RunWorkflow(
 	ctx context.Context,
 	inputPath string,
 ) ([]workflow.Data, error) {
-	c.Logger.Info().Msg("running secrets test workflow...")
-
 	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPath)
 	if err != nil {
 		return nil, err
@@ -191,8 +189,6 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 	if instrumentation != nil {
 		instrumentation.RecordFileUploadTimeMs(uploadStartTime)
 	}
-
-	c.Logger.Info().Msg(fmt.Sprintf("Revision ID: %s", uploadRevision.RevisionID))
 
 	return uploadRevision.RevisionID.String(), nil
 }
@@ -287,7 +283,6 @@ func (c *Command) prepareOutput(
 		if projectID != nil {
 			projectPageURL, err := url.JoinPath(*c.ReportConfig.ProjectPageURL, projectID.String())
 			if err == nil {
-				c.Logger.Info().Msgf("Project page URL: %s", projectPageURL)
 				testResult.SetMetadata(ProjectPageLink, projectPageURL)
 			}
 		}
