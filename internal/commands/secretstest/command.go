@@ -27,7 +27,7 @@ import (
 const (
 	FilterAndUploadFilesTimeout = 30 * time.Second
 	LogFieldCount               = "count"
-	ProjectPageLink             = "project-page-link"
+	ReportURL                   = "report-url"
 )
 
 // ReportConfig holds the configuration for the --report flag and related project attributes.
@@ -283,7 +283,7 @@ func (c *Command) prepareOutput(
 		if projectID != nil {
 			projectPageURL, err := url.JoinPath(*c.ReportConfig.ProjectPageURL, projectID.String())
 			if err == nil {
-				testResult.SetMetadata(ProjectPageLink, projectPageURL)
+				testResult.SetMetadata(ReportURL, projectPageURL)
 			}
 		}
 	}
