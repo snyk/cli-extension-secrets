@@ -420,11 +420,11 @@ func TestPrepareOutput_NoReport_ReturnsFindingsInOutput(t *testing.T) {
 	assert.Equal(t, expectedFindings[0].Attributes.Key, findings[0].Attributes.Key)
 	assert.Equal(t, expectedFindings[0].Attributes.Title, findings[0].Attributes.Title)
 
-	_, metaErr := output[0].GetMetaData(ProjectPageLink)
-	assert.Error(t, metaErr, "project-page-link should not be set when report is false")
+	_, metaErr := output[0].GetMetaData(ReportURL)
+	assert.Error(t, metaErr, "report-url should not be set when report is false")
 }
 
-func TestPrepareOutput_NoReport_ReturnsOutputWithoutProjectPageLink(t *testing.T) {
+func TestPrepareOutput_NoReport_ReturnsOutputWithoutReportURL(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -446,8 +446,8 @@ func TestPrepareOutput_NoReport_ReturnsOutputWithoutProjectPageLink(t *testing.T
 
 	require.NoError(t, err)
 	require.NotEmpty(t, output)
-	_, metaErr := output[0].GetMetaData(ProjectPageLink)
-	assert.Error(t, metaErr, "project-page-link should not be set when report is false")
+	_, metaErr := output[0].GetMetaData(ReportURL)
+	assert.Error(t, metaErr, "report-url should not be set when report is false")
 }
 
 func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t *testing.T) {
@@ -476,7 +476,7 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
-	mockTestResult.EXPECT().SetMetadata(ProjectPageLink, "https://app.snyk.io/org/my-org/project/"+projectID.String())
+	mockTestResult.EXPECT().SetMetadata(ReportURL, "https://app.snyk.io/org/my-org/project/"+projectID.String())
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
 
@@ -514,8 +514,8 @@ func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T)
 
 	require.NoError(t, err)
 	require.NotEmpty(t, output)
-	_, metaErr := output[0].GetMetaData(ProjectPageLink)
-	assert.Error(t, metaErr, "project-page-link should not be set when project ID is missing")
+	_, metaErr := output[0].GetMetaData(ReportURL)
+	assert.Error(t, metaErr, "report-url should not be set when project ID is missing")
 }
 
 func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
@@ -543,8 +543,8 @@ func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotEmpty(t, output)
-	_, metaErr := output[0].GetMetaData(ProjectPageLink)
-	assert.Error(t, metaErr, "project-page-link should not be set when ProjectPageURL is nil")
+	_, metaErr := output[0].GetMetaData(ReportURL)
+	assert.Error(t, metaErr, "report-url should not be set when ProjectPageURL is nil")
 }
 
 func TestPrepareOutput_NilInvocationContext_ReturnsError(t *testing.T) {
@@ -589,8 +589,8 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsError_NoLink(t *testing.
 
 	require.NoError(t, err)
 	for _, d := range output {
-		_, metaErr := d.GetMetaData(ProjectPageLink)
-		assert.Error(t, metaErr, "project-page-link should not be set when findings retrieval fails")
+		_, metaErr := d.GetMetaData(ReportURL)
+		assert.Error(t, metaErr, "report-url should not be set when findings retrieval fails")
 	}
 }
 
