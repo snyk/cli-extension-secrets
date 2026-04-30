@@ -183,6 +183,8 @@ github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905 h
 github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905/go.mod h1:Ytttq7Pw4vOCu9NtRQaOeDU2dhBYUyNBe6kX4+nIIQ4=
 github.com/snyk/go-application-framework v0.0.0-20260415125756-359a47bc05a2 h1:kFEEhbccIVt792Jsl9A777ctDNI+VZGOAunnJUVCh+g=
 github.com/snyk/go-application-framework v0.0.0-20260415125756-359a47bc05a2/go.mod h1:7IOOtKxiQhtTbkrX7rax20QNJ/rwGill6n2Rejtld2I=
+github.com/snyk/go-application-framework v0.0.0-20260430090705-ca73e23aee09 h1:cxGG/WvBNDhqrc0G0bYsRc9WnI0Uri7Hv2oF6n/+kkI=
+github.com/snyk/go-application-framework v0.0.0-20260430090705-ca73e23aee09/go.mod h1:7IOOtKxiQhtTbkrX7rax20QNJ/rwGill6n2Rejtld2I=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 h1:s9PHNkL6ueYRiAKNfd8OVxlUOqU3qY0VDbgCD1f6WQY=
 github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530/go.mod h1:88KbbvGYlmLgee4OcQ19yr0bNpXpOr2kciOthaSzCAg=
 github.com/sourcegraph/conc v0.3.0 h1:OQTbbt6P72L20UqAkXXuLOj79LfEanQ+YQFNpLA9ySo=
