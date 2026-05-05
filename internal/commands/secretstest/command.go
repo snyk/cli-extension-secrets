@@ -203,7 +203,7 @@ func (c *Command) triggerScan(ctx context.Context, uploadRevision string) (testa
 		return nil, c.ErrorFactory.NewTestResourceError(err)
 	}
 
-	testConfig := buildTestConfiguration(&c.ReportConfig, c.SeverityThreshold)
+	testConfig := buildTestConfiguration(&c.ReportConfig, c.SeverityThreshold, c.Branch)
 	resources := []testapi.TestResourceCreateItem{testResource}
 	param := testapi.NewStartTestParamsFromResources(c.OrgID, &resources, testConfig)
 
@@ -346,7 +346,7 @@ func (c *Command) executeTest(ctx context.Context, params testapi.StartTestParam
 	return finalResult, nil
 }
 
-func buildTestConfiguration(rc *ReportConfig, severityThreshold string) *testapi.TestConfiguration {
+func buildTestConfiguration(rc *ReportConfig, severityThreshold, branch string) *testapi.TestConfiguration {
 	cfg := &testapi.TestConfiguration{
 		ScanConfig: &testapi.ScanConfiguration{Secrets: &testapi.SecretsScanConfiguration{}},
 	}
@@ -367,6 +367,11 @@ func buildTestConfiguration(rc *ReportConfig, severityThreshold string) *testapi
 
 	if rc.TargetName != "" {
 		cfg.TargetName = &rc.TargetName
+	}
+
+	// default to use the detected branch if available
+	if branch != "" {
+		cfg.TargetReference = &branch
 	}
 	if rc.TargetReference != "" {
 		cfg.TargetReference = &rc.TargetReference

@@ -307,7 +307,7 @@ func TestCommand_RunWorkflow_ReportWithSeverityThresholdCombined(t *testing.T) {
 }
 
 func Test_buildTestConfiguration_NoReportNoThreshold(t *testing.T) {
-	cfg := buildTestConfiguration(&ReportConfig{}, "")
+	cfg := buildTestConfiguration(&ReportConfig{}, "", "")
 
 	require.NotNil(t, cfg.ScanConfig)
 	assert.NotNil(t, cfg.ScanConfig.Secrets)
@@ -316,7 +316,7 @@ func Test_buildTestConfiguration_NoReportNoThreshold(t *testing.T) {
 }
 
 func Test_buildTestConfiguration_ThresholdOnly(t *testing.T) {
-	cfg := buildTestConfiguration(&ReportConfig{}, "critical")
+	cfg := buildTestConfiguration(&ReportConfig{}, "critical", "")
 
 	require.NotNil(t, cfg.LocalPolicy)
 	require.NotNil(t, cfg.LocalPolicy.SeverityThreshold)
@@ -325,7 +325,7 @@ func Test_buildTestConfiguration_ThresholdOnly(t *testing.T) {
 }
 
 func Test_buildTestConfiguration_ReportSetsPublishReport(t *testing.T) {
-	cfg := buildTestConfiguration(&ReportConfig{Report: true}, "")
+	cfg := buildTestConfiguration(&ReportConfig{Report: true}, "", "")
 
 	require.NotNil(t, cfg.PublishReport)
 	assert.True(t, *cfg.PublishReport)
@@ -335,7 +335,7 @@ func Test_buildTestConfiguration_CommaSeparatedEnvironment(t *testing.T) {
 	cfg := buildTestConfiguration(&ReportConfig{
 		Report:             true,
 		ProjectEnvironment: "frontend,backend,internal",
-	}, "")
+	}, "", "")
 
 	require.NotNil(t, cfg.ProjectEnvironment)
 	assert.Equal(t, []string{"frontend", "backend", "internal"}, *cfg.ProjectEnvironment)
@@ -345,7 +345,7 @@ func Test_buildTestConfiguration_CommaSeparatedLifecycle(t *testing.T) {
 	cfg := buildTestConfiguration(&ReportConfig{
 		Report:           true,
 		ProjectLifecycle: "production,sandbox",
-	}, "")
+	}, "", "")
 
 	require.NotNil(t, cfg.ProjectLifecycle)
 	assert.Equal(t, []string{"production", "sandbox"}, *cfg.ProjectLifecycle)
@@ -355,10 +355,44 @@ func Test_buildTestConfiguration_CommaSeparatedTags(t *testing.T) {
 	cfg := buildTestConfiguration(&ReportConfig{
 		Report:      true,
 		ProjectTags: "team=platform,priority=p1",
-	}, "")
+	}, "", "")
 
 	require.NotNil(t, cfg.ProjectTags)
 	assert.Equal(t, []string{"team=platform", "priority=p1"}, *cfg.ProjectTags)
+}
+
+func Test_buildTestConfiguration_UseDetectedBranchNoTargetRef(t *testing.T) {
+	cfg := buildTestConfiguration(&ReportConfig{
+		Report: true,
+	}, "", "main")
+
+	assert.Equal(t, *cfg.TargetReference, "main")
+}
+
+func Test_buildTestConfiguration_UseTargetRefInsteadOfBranch(t *testing.T) {
+	cfg := buildTestConfiguration(&ReportConfig{
+		Report:          true,
+		TargetReference: "custom-branch",
+	}, "", "main")
+
+	assert.Equal(t, *cfg.TargetReference, "custom-branch")
+}
+
+func Test_buildTestConfiguration_NonGitRepo(t *testing.T) {
+	cfg := buildTestConfiguration(&ReportConfig{
+		Report: true,
+	}, "", "")
+
+	assert.Nil(t, cfg.TargetReference)
+}
+
+func Test_buildTestConfiguration_NonGitRepoWithTargetRef(t *testing.T) {
+	cfg := buildTestConfiguration(&ReportConfig{
+		Report:          true,
+		TargetReference: "custom-branch",
+	}, "", "")
+
+	assert.Equal(t, *cfg.TargetReference, "custom-branch")
 }
 
 func Test_buildTestConfiguration_AttributesIgnoredWhenReportFalse(t *testing.T) {
@@ -370,7 +404,7 @@ func Test_buildTestConfiguration_AttributesIgnoredWhenReportFalse(t *testing.T) 
 		ProjectEnvironment:         "frontend",
 		ProjectLifecycle:           "production",
 		ProjectTags:                "team=x",
-	}, "")
+	}, "", "main")
 
 	assert.Nil(t, cfg.PublishReport)
 	assert.Nil(t, cfg.TargetName)
