@@ -214,7 +214,7 @@ func TestFindBranchName(t *testing.T) {
 			gitRootDir:     "",
 			expectedBranch: "",
 			expectErr:      true,
-			expectedErrMsg: "git root directory not available",
+			expectedErrMsg: errGitRootDirNotAvailable,
 		},
 		{
 			name:           "git error propagated",
@@ -276,7 +276,7 @@ func TestFindCommitRef(t *testing.T) {
 			gitRootDir:        "",
 			expectedCommitRef: "",
 			expectErr:         true,
-			expectedErrMsg:    "git root directory not available",
+			expectedErrMsg:    errGitRootDirNotAvailable,
 		},
 		{
 			name:              "git error propagated",

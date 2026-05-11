@@ -195,16 +195,16 @@ func TestCheckBOM(t *testing.T) {
 		wantReason string
 	}{
 		{
-			name:       "utf-16-le-bom",
+			name:       reasonUTF16LEBOM,
 			header:     []byte{0xFF, 0xFE, 'h', 'e', 'l', 'l', 'o'},
 			wantIsText: true,
-			wantReason: "utf-16-le-bom",
+			wantReason: reasonUTF16LEBOM,
 		},
 		{
-			name:       "utf-16-be-bom",
+			name:       reasonUTF16BEBOM,
 			header:     []byte{0xFE, 0xFF, 'h', 'e', 'l', 'l', 'o'},
 			wantIsText: true,
-			wantReason: "utf-16-be-bom",
+			wantReason: reasonUTF16BEBOM,
 		},
 		{
 			name:       "no-bom-ascii",
@@ -245,7 +245,7 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 			name:       "strong-utf16-le-pattern",
 			header:     []byte{'h', 0x00, 'e', 0x00, 'l', 0x00, 'l', 0x00, 'o', 0x00},
 			wantIsText: true,
-			wantReason: "utf-16-heuristic",
+			wantReason: reasonUTF16Heuristic,
 		},
 		{
 			name:       "no-nulls",
@@ -263,7 +263,7 @@ func TestCheckUTF16Heuristic(t *testing.T) {
 			name:       "borderline-pass-91-percent", // 10 odd, 1 even
 			header:     []byte{'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 'a', 0x00, 0x00, 'b'},
 			wantIsText: true,
-			wantReason: "utf-16-heuristic",
+			wantReason: reasonUTF16Heuristic,
 		},
 	}
 

@@ -22,11 +22,11 @@ func TestValidateFlagValue(t *testing.T) {
 		{
 			in: testInput{
 				config: map[string]any{
-					FlagProjectEnvironment: "backend",
+					FlagProjectEnvironment: optionBackend,
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 				},
 			},
@@ -36,11 +36,11 @@ func TestValidateFlagValue(t *testing.T) {
 		{
 			in: testInput{
 				config: map[string]any{
-					FlagProjectEnvironment: "backend,backend",
+					FlagProjectEnvironment: optionBackend + "," + optionBackend,
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 				},
 			},
@@ -54,7 +54,7 @@ func TestValidateFlagValue(t *testing.T) {
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 				},
 			},
@@ -68,7 +68,7 @@ func TestValidateFlagValue(t *testing.T) {
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   false,
 				},
 			},
@@ -82,7 +82,7 @@ func TestValidateFlagValue(t *testing.T) {
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 				},
 			},
@@ -96,7 +96,7 @@ func TestValidateFlagValue(t *testing.T) {
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 				},
 			},
@@ -106,11 +106,11 @@ func TestValidateFlagValue(t *testing.T) {
 		{
 			in: testInput{
 				config: map[string]any{
-					FlagProjectEnvironment: "backend",
+					FlagProjectEnvironment: optionBackend,
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 					singleChoice: true,
 				},
@@ -121,11 +121,11 @@ func TestValidateFlagValue(t *testing.T) {
 		{
 			in: testInput{
 				config: map[string]any{
-					FlagProjectEnvironment: "backend,frontend",
+					FlagProjectEnvironment: optionBackend + ",frontend",
 				},
 				flag: flagWithOptions{
 					name:         FlagProjectEnvironment,
-					validOptions: map[string]struct{}{"backend": {}, "frontend": {}},
+					validOptions: map[string]struct{}{optionBackend: {}, optionFrontend: {}},
 					allowEmpty:   true,
 					singleChoice: true,
 				},
@@ -238,9 +238,9 @@ func TestValidateReportConfig(t *testing.T) {
 		{
 			in: map[string]any{
 				FlagProjectTags:                "env=dev,stage=first",
-				FlagProjectLifecycle:           "production",
-				FlagProjectBusinessCriticality: "critical",
-				FlagProjectEnvironment:         "backend",
+				FlagProjectLifecycle:           optionProduction,
+				FlagProjectBusinessCriticality: optionCritical,
+				FlagProjectEnvironment:         optionBackend,
 				FlagReport:                     true,
 			},
 			hasErr: false,
@@ -248,7 +248,7 @@ func TestValidateReportConfig(t *testing.T) {
 		},
 		{
 			in: map[string]any{
-				FlagProjectEnvironment: "backend",
+				FlagProjectEnvironment: optionBackend,
 				FlagReport:             false,
 			},
 			hasErr: true,
@@ -297,7 +297,7 @@ func TestValidateFlagsConfig(t *testing.T) {
 	}{
 		{
 			in: map[string]any{
-				FlagProjectEnvironment: "backend",
+				FlagProjectEnvironment: optionBackend,
 			},
 			hasErr: true,
 			desc:   "invalid usage of --project-environment without --report",
@@ -305,7 +305,7 @@ func TestValidateFlagsConfig(t *testing.T) {
 		{
 			in: map[string]any{
 				FlagReport:             true,
-				FlagProjectEnvironment: "backend",
+				FlagProjectEnvironment: optionBackend,
 			},
 			hasErr: false,
 			desc:   "valid config with valid --report options",
@@ -319,7 +319,7 @@ func TestValidateFlagsConfig(t *testing.T) {
 		},
 		{
 			in: map[string]any{
-				FlagSeverityThreshold: "low",
+				FlagSeverityThreshold: optionLow,
 			},
 			hasErr: false,
 			desc:   "valid --severity-threshold",

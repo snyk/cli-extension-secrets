@@ -219,9 +219,9 @@ func TestBuildReportConfig_ReportTrue_AllFields(t *testing.T) {
 	config.Set(FlagTargetName, "my-target")
 	config.Set(FlagTargetReference, "main")
 	config.Set(FlagProjectTags, "team=security")
-	config.Set(FlagProjectBusinessCriticality, "critical")
-	config.Set(FlagProjectEnvironment, "frontend")
-	config.Set(FlagProjectLifecycle, "production")
+	config.Set(FlagProjectBusinessCriticality, optionCritical)
+	config.Set(FlagProjectEnvironment, optionFrontend)
+	config.Set(FlagProjectLifecycle, optionProduction)
 	config.Set(configuration.ORGANIZATION_SLUG, "test-org")
 	config.Set(configuration.WEB_APP_URL, "https://snyk.example.com")
 
@@ -231,9 +231,9 @@ func TestBuildReportConfig_ReportTrue_AllFields(t *testing.T) {
 	assert.Equal(t, "my-target", rc.TargetName)
 	assert.Equal(t, "main", rc.TargetReference)
 	assert.Equal(t, "team=security", rc.ProjectTags)
-	assert.Equal(t, "critical", rc.ProjectBusinessCriticality)
-	assert.Equal(t, "frontend", rc.ProjectEnvironment)
-	assert.Equal(t, "production", rc.ProjectLifecycle)
+	assert.Equal(t, optionCritical, rc.ProjectBusinessCriticality)
+	assert.Equal(t, optionFrontend, rc.ProjectEnvironment)
+	assert.Equal(t, optionProduction, rc.ProjectLifecycle)
 	assert.Equal(t, "https://snyk.example.com/org/test-org/project", *rc.ProjectPageURL)
 }
 

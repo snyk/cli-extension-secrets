@@ -81,6 +81,7 @@ func TestCommand_RunWorkflow_Success(t *testing.T) {
 	mockTestResult.EXPECT().Get(testapi.TestResultRawSummary).Return(nil)
 	mockTestResult.EXPECT().Get(testapi.TestResultTestFacts).Return(nil)
 	mockTestResult.EXPECT().Get(testapi.TestResultMetadata).Return(map[string]interface{}{})
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{})
 
 	// Mock CLIUserInterface calls
 	mockUI.EXPECT().SetTitle(gomock.Any()).AnyTimes()
@@ -115,9 +116,9 @@ func TestCommand_RunWorkflow_ReportWithAllProjectAttributes(t *testing.T) {
 		Report:                     true,
 		TargetName:                 "my-project",
 		TargetReference:            "main",
-		ProjectBusinessCriticality: "critical",
-		ProjectEnvironment:         "frontend,backend",
-		ProjectLifecycle:           "production,development",
+		ProjectBusinessCriticality: optionCritical,
+		ProjectEnvironment:         "frontend," + optionBackend,
+		ProjectLifecycle:           optionProduction + ",development",
 		ProjectTags:                "team=security,priority=high",
 	}
 
@@ -140,13 +141,13 @@ func TestCommand_RunWorkflow_ReportWithAllProjectAttributes(t *testing.T) {
 	assert.Equal(t, "main", *cfg.TargetReference)
 
 	require.NotNil(t, cfg.ProjectBusinessCriticality)
-	assert.Equal(t, "critical", *cfg.ProjectBusinessCriticality)
+	assert.Equal(t, optionCritical, *cfg.ProjectBusinessCriticality)
 
 	require.NotNil(t, cfg.ProjectEnvironment)
-	assert.Equal(t, []string{"frontend", "backend"}, *cfg.ProjectEnvironment)
+	assert.Equal(t, []string{optionFrontend, optionBackend}, *cfg.ProjectEnvironment)
 
 	require.NotNil(t, cfg.ProjectLifecycle)
-	assert.Equal(t, []string{"production", "development"}, *cfg.ProjectLifecycle)
+	assert.Equal(t, []string{optionProduction, "development"}, *cfg.ProjectLifecycle)
 
 	require.NotNil(t, cfg.ProjectTags)
 	assert.Equal(t, []string{"team=security", "priority=high"}, *cfg.ProjectTags)
@@ -208,7 +209,7 @@ func TestCommand_RunWorkflow_SeverityThresholdSetsLocalPolicy(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
-	cmd.SeverityThreshold = "high"
+	cmd.SeverityThreshold = optionHigh
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
 	output, err := cmd.RunWorkflow(ctx, ".")
@@ -220,7 +221,7 @@ func TestCommand_RunWorkflow_SeverityThresholdSetsLocalPolicy(t *testing.T) {
 	require.NotNil(t, cfg)
 	require.NotNil(t, cfg.LocalPolicy)
 	require.NotNil(t, cfg.LocalPolicy.SeverityThreshold)
-	assert.Equal(t, testapi.Severity("high"), *cfg.LocalPolicy.SeverityThreshold)
+	assert.Equal(t, testapi.Severity(optionHigh), *cfg.LocalPolicy.SeverityThreshold)
 }
 
 func TestCommand_RunWorkflow_NoSeverityThresholdOmitsLocalPolicy(t *testing.T) {
@@ -278,7 +279,7 @@ func TestCommand_RunWorkflow_ReportWithSeverityThresholdCombined(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
-	cmd.SeverityThreshold = "medium"
+	cmd.SeverityThreshold = optionMedium
 	cmd.ReportConfig = ReportConfig{
 		Report:     true,
 		TargetName: "combo-project",
@@ -294,7 +295,7 @@ func TestCommand_RunWorkflow_ReportWithSeverityThresholdCombined(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	require.NotNil(t, cfg.LocalPolicy)
-	assert.Equal(t, testapi.Severity("medium"), *cfg.LocalPolicy.SeverityThreshold)
+	assert.Equal(t, testapi.Severity(optionMedium), *cfg.LocalPolicy.SeverityThreshold)
 
 	require.NotNil(t, cfg.PublishReport)
 	assert.True(t, *cfg.PublishReport)
@@ -316,11 +317,11 @@ func Test_buildTestConfiguration_NoReportNoThreshold(t *testing.T) {
 }
 
 func Test_buildTestConfiguration_ThresholdOnly(t *testing.T) {
-	cfg := buildTestConfiguration(&ReportConfig{}, "critical", "")
+	cfg := buildTestConfiguration(&ReportConfig{}, optionCritical, "")
 
 	require.NotNil(t, cfg.LocalPolicy)
 	require.NotNil(t, cfg.LocalPolicy.SeverityThreshold)
-	assert.Equal(t, testapi.Severity("critical"), *cfg.LocalPolicy.SeverityThreshold)
+	assert.Equal(t, testapi.Severity(optionCritical), *cfg.LocalPolicy.SeverityThreshold)
 	assert.Nil(t, cfg.PublishReport)
 }
 
@@ -334,21 +335,21 @@ func Test_buildTestConfiguration_ReportSetsPublishReport(t *testing.T) {
 func Test_buildTestConfiguration_CommaSeparatedEnvironment(t *testing.T) {
 	cfg := buildTestConfiguration(&ReportConfig{
 		Report:             true,
-		ProjectEnvironment: "frontend,backend,internal",
+		ProjectEnvironment: "frontend," + optionBackend + ",internal",
 	}, "", "")
 
 	require.NotNil(t, cfg.ProjectEnvironment)
-	assert.Equal(t, []string{"frontend", "backend", "internal"}, *cfg.ProjectEnvironment)
+	assert.Equal(t, []string{optionFrontend, optionBackend, "internal"}, *cfg.ProjectEnvironment)
 }
 
 func Test_buildTestConfiguration_CommaSeparatedLifecycle(t *testing.T) {
 	cfg := buildTestConfiguration(&ReportConfig{
 		Report:           true,
-		ProjectLifecycle: "production,sandbox",
+		ProjectLifecycle: optionProduction + ",sandbox",
 	}, "", "")
 
 	require.NotNil(t, cfg.ProjectLifecycle)
-	assert.Equal(t, []string{"production", "sandbox"}, *cfg.ProjectLifecycle)
+	assert.Equal(t, []string{optionProduction, "sandbox"}, *cfg.ProjectLifecycle)
 }
 
 func Test_buildTestConfiguration_CommaSeparatedTags(t *testing.T) {
@@ -400,9 +401,9 @@ func Test_buildTestConfiguration_AttributesIgnoredWhenReportFalse(t *testing.T) 
 		Report:                     false,
 		TargetName:                 "should-be-ignored",
 		TargetReference:            "also-ignored",
-		ProjectBusinessCriticality: "critical",
-		ProjectEnvironment:         "frontend",
-		ProjectLifecycle:           "production",
+		ProjectBusinessCriticality: optionCritical,
+		ProjectEnvironment:         optionFrontend,
+		ProjectLifecycle:           optionProduction,
 		ProjectTags:                "team=x",
 	}, "", "main")
 
@@ -436,6 +437,7 @@ func TestPrepareOutput_NoReport_ReturnsFindingsInOutput(t *testing.T) {
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{}).AnyTimes()
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(expectedFindings, true, nil).AnyTimes()
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
@@ -474,6 +476,7 @@ func TestPrepareOutput_NoReport_ReturnsOutputWithoutReportURL(t *testing.T) {
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{}).AnyTimes()
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
@@ -503,12 +506,16 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	var findings []testapi.FindingData
 	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
 
+	components := &[]testapi.TestComponent{{ProjectId: &projectID}}
+
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
+
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(components).AnyTimes()
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil).AnyTimes()
 	mockTestResult.EXPECT().SetMetadata(ReportURL, "https://app.snyk.io/org/my-org/project/"+projectID.String())
 
@@ -535,13 +542,16 @@ func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T)
 	findingsWithoutProject := []testapi.FindingData{
 		{Relationships: nil},
 	}
+	components := &[]testapi.TestComponent{{}}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+
 	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(components).AnyTimes()
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findingsWithoutProject, true, nil).AnyTimes()
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
@@ -571,6 +581,7 @@ func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
 	setupMockTestResultForPrepareOutput(mockTestResult)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{}).AnyTimes()
 	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, true, nil).AnyTimes()
 
 	output, err := cmd.prepareOutput(ctx, mockTestResult)
@@ -597,38 +608,7 @@ func TestPrepareOutput_NilInvocationContext_ReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invocation context is nil")
 }
 
-func TestPrepareOutput_ReportWithProjectPageURL_FindingsError_NoLink(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zerolog.Nop()
-	pageURL := "https://app.snyk.io/org/my-org/project"
-	cmd := &Command{
-		Logger: &logger,
-		ReportConfig: ReportConfig{
-			Report:         true,
-			ProjectPageURL: &pageURL,
-		},
-	}
-
-	mockIctx := mocks.NewMockInvocationContext(ctrl)
-	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
-	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
-
-	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	setupMockTestResultForPrepareOutput(mockTestResult)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("findings fetch failed")).AnyTimes()
-
-	output, err := cmd.prepareOutput(ctx, mockTestResult)
-
-	require.NoError(t, err)
-	for _, d := range output {
-		_, metaErr := d.GetMetaData(ReportURL)
-		assert.Error(t, metaErr, "report-url should not be set when findings retrieval fails")
-	}
-}
-
-func TestRetrieveProjectID_FindingsWithProjectID_ReturnsID(t *testing.T) {
+func TestRetrieveProjectID_ComponentsWithProjectID_ReturnsID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -639,90 +619,41 @@ func TestRetrieveProjectID_FindingsWithProjectID_ReturnsID(t *testing.T) {
 	var findings []testapi.FindingData
 	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
 
-	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+	components := &[]testapi.TestComponent{{ProjectId: &expectedID}}
 
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(components)
+
+	result := retrieveProjectID(mockTestResult, &logger)
 
 	require.NotNil(t, result)
 	assert.Equal(t, expectedID, *result)
 }
 
-func TestRetrieveProjectID_FindingsError_ReturnsNil(t *testing.T) {
+func TestRetrieveProjectID_EmptyComponents_ReturnsNil(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(nil, false, errors.New("fetch failed"))
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{})
 
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+	result := retrieveProjectID(mockTestResult, &logger)
 
 	assert.Nil(t, result)
 }
 
-func TestRetrieveProjectID_EmptyFindings_ReturnsNil(t *testing.T) {
+func TestRetrieveProjectID_IncompleteComponents_ReturnsNil(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
-
+	components := &[]testapi.TestComponent{}
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return([]testapi.FindingData{}, true, nil)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(components)
 
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
-
-	assert.Nil(t, result)
-}
-
-func TestRetrieveProjectID_IncompleteFindings_ReturnsNil(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zerolog.Nop()
-
-	findingsJSON := `[{"relationships":{"project":{"data":{"id":"` + uuid.New().String() + `","type":"project"}}}}]`
-	var findings []testapi.FindingData
-	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
-
-	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, false, nil)
-
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
-
-	assert.Nil(t, result)
-}
-
-func TestRetrieveProjectID_NilRelationships_ReturnsNil(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zerolog.Nop()
-	findings := []testapi.FindingData{{Relationships: nil}}
-
-	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
-
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
-
-	assert.Nil(t, result)
-}
-
-func TestRetrieveProjectID_NilProjectData_ReturnsNil(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	logger := zerolog.Nop()
-
-	findingsJSON := `[{"relationships":{"project":{}}}]`
-	var findings []testapi.FindingData
-	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
-
-	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
-
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+	result := retrieveProjectID(mockTestResult, &logger)
 
 	assert.Nil(t, result)
 }
@@ -732,15 +663,13 @@ func TestRetrieveProjectID_NilUUID_ReturnsNil(t *testing.T) {
 	defer ctrl.Finish()
 
 	logger := zerolog.Nop()
-
-	findingsJSON := `[{"relationships":{"project":{"data":{"id":"00000000-0000-0000-0000-000000000000","type":"project"}}}}]`
-	var findings []testapi.FindingData
-	require.NoError(t, json.Unmarshal([]byte(findingsJSON), &findings))
+	expectedID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+	components := &[]testapi.TestComponent{{ProjectId: &expectedID}}
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
-	mockTestResult.EXPECT().Findings(gomock.Any()).Return(findings, true, nil)
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(components)
 
-	result := retrieveProjectID(t.Context(), mockTestResult, &logger)
+	result := retrieveProjectID(mockTestResult, &logger)
 
 	assert.Nil(t, result, "uuid.Nil should be treated as missing project ID")
 }
@@ -944,6 +873,7 @@ func setupSuccessfulRunWithParamCapture(
 	mockTestResult.EXPECT().Get(testapi.TestResultRawSummary).Return(nil)
 	mockTestResult.EXPECT().Get(testapi.TestResultTestFacts).Return(nil)
 	mockTestResult.EXPECT().Get(testapi.TestResultMetadata).Return(map[string]interface{}{})
+	mockTestResult.EXPECT().Get(testapi.TestResultComponents).Return(&[]testapi.TestComponent{})
 
 	mockUI.EXPECT().SetTitle(gomock.Any()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})

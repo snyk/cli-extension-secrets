@@ -66,7 +66,7 @@ func TestFilter_Logic(t *testing.T) {
 		"drop_binary.exe":    "test content",
 		"drop_vendor/lib.js": "test content",
 		"keep_me_too.go":     "test content",
-		".gitignore":         "test content",
+		gitIgnoreFile:        "test content",
 		".gitleaksignore":    "test content",
 	}
 	dirPath := setupTempDir(t, inputFiles)

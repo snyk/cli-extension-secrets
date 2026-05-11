@@ -21,17 +21,26 @@ const (
 	MaxTargetNameLength      = 256
 	MaxTargetReferenceLength = 256
 	MaxFileOutputPathLength  = 4096
+
+	optionCritical = "critical"
+	optionHigh     = "high"
+	optionMedium   = "medium"
+	optionLow      = "low"
+
+	optionBackend    = "backend"
+	optionProduction = "production"
+	optionFrontend   = "frontend"
 )
 
 var (
 	validOptionsCriticality = map[string]struct{}{
-		"critical": {}, "high": {}, "medium": {}, "low": {},
+		optionCritical: {}, optionHigh: {}, optionMedium: {}, optionLow: {},
 	}
 	validOptionsProjectEnv = map[string]struct{}{
-		"frontend": {}, "backend": {}, "internal": {}, "external": {}, "mobile": {}, "saas": {}, "onprem": {}, "hosted": {}, "distributed": {},
+		optionFrontend: {}, optionBackend: {}, "internal": {}, "external": {}, "mobile": {}, "saas": {}, "onprem": {}, "hosted": {}, "distributed": {},
 	}
 	validOptionsProjectLifecycle = map[string]struct{}{
-		"production": {}, "development": {}, "sandbox": {},
+		optionProduction: {}, "development": {}, "sandbox": {},
 	}
 )
 

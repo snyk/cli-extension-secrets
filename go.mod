@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260506111235-cca3157b9435
+	github.com/snyk/go-application-framework v0.0.0-20260508164924-08def854da24
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 )
