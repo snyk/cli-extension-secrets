@@ -7,6 +7,10 @@ import (
 )
 
 const (
+	reasonUTF16LEBOM     = "utf-16-le-bom"
+	reasonUTF16BEBOM     = "utf-16-be-bom"
+	reasonUTF16Heuristic = "utf-16-heuristic"
+
 	// _MinNullsForUTF16Heuristic is the minimum number of nulls needed to trust the pattern
 	// A single stray null byte isn't a pattern.
 	_MinNullsForUTF16Heuristic = 4
@@ -79,10 +83,10 @@ func IsTextContent(data []byte) bool {
 // checkBOM looks for known Unicode Byte Order Marks that signify text.
 func checkBOM(header []byte) (isText bool, reason string) {
 	if bytes.HasPrefix(header, bomUTF16LE) {
-		return true, "utf-16-le-bom"
+		return true, reasonUTF16LEBOM
 	}
 	if bytes.HasPrefix(header, bomUTF16BE) {
-		return true, "utf-16-be-bom"
+		return true, reasonUTF16BEBOM
 	}
 	return false, ""
 }
@@ -119,7 +123,7 @@ func checkUTF16Heuristic(header []byte) (isText bool, reason string) {
 	// Check if the pattern is strong enough
 	if evenShare > _UTF16PatternThreshold || oddShare > _UTF16PatternThreshold {
 		// >90% of nulls are on one side. This is a strong UTF-16 signal
-		return true, "utf-16-heuristic"
+		return true, reasonUTF16Heuristic
 	}
 	// Default: Nulls are present but scattered randomly
 	return false, "has-null-random"

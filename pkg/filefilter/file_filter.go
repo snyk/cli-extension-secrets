@@ -10,7 +10,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var ignoreFiles = []string{".gitignore"}
+const gitIgnoreFile = ".gitignore"
+
+var ignoreFiles = []string{gitIgnoreFile}
 
 // FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {

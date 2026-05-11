@@ -279,7 +279,7 @@ func (c *Command) prepareOutput(
 	}
 
 	if c.ReportConfig.Report && c.ReportConfig.ProjectPageURL != nil {
-		projectID := retrieveProjectID(ctx, testResult, c.Logger)
+		projectID := retrieveProjectID(testResult, c.Logger)
 		if projectID != nil {
 			projectPageURL, err := url.JoinPath(*c.ReportConfig.ProjectPageURL, projectID.String())
 			if err == nil {
@@ -395,19 +395,19 @@ func buildTestConfiguration(rc *ReportConfig, severityThreshold, branch string) 
 	return cfg
 }
 
-func retrieveProjectID(ctx context.Context, testResult testapi.TestResult, logger *zerolog.Logger) *uuid.UUID {
-	findings, complete, err := testResult.Findings(ctx)
-	if err != nil || !complete || len(findings) == 0 {
-		logger.Warn().Msg("Unable to retrieve project ID from findings")
+func retrieveProjectID(testResult testapi.TestResult, logger *zerolog.Logger) *uuid.UUID {
+	componentsPtr, ok := testResult.Get(testapi.TestResultComponents).(*[]testapi.TestComponent)
+	if !ok || componentsPtr == nil || len(*componentsPtr) == 0 {
+		logger.Warn().Msg("Unable to retrieve project ID from components")
 		return nil
 	}
 
-	rel := findings[0].Relationships
-	if rel == nil || rel.Project == nil || rel.Project.Data == nil || rel.Project.Data.Id == uuid.Nil {
-		logger.Warn().Msg("Unable to retrieve project ID from findings relationships")
+	first := (*componentsPtr)[0]
+	if first.ProjectId == nil || *first.ProjectId == uuid.Nil {
+		logger.Warn().Msg("Unable to retrieve project ID from component")
 		return nil
 	}
 
-	id := rel.Project.Data.Id
+	id := *first.ProjectId
 	return &id
 }

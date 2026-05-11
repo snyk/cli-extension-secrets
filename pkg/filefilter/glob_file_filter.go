@@ -85,7 +85,7 @@ var ignoreGenericFilesGlob = []string{
 	// Configs & Metadata
 	".git/",
 	".gitleaks/",
-	".gitignore",
+	gitIgnoreFile,
 	"gitleaks.toml",
 	".gitleaksignore",
 	"javascript.json",

@@ -13,6 +13,8 @@ import (
 	"github.com/snyk/go-application-framework/pkg/utils/git"
 )
 
+const errGitRootDirNotAvailable = "git root directory not available"
+
 // Git repository detection and context resolution.
 var (
 	Git                   = ".git"
@@ -105,7 +107,7 @@ func findRepoURLWithOverride(gitRootFolder, remoteRepoURLFlag string) (repoURL s
 
 func findBranchName(gitRootDir string) (string, error) {
 	if gitRootDir == "" {
-		return "", fmt.Errorf("git root directory not available")
+		return "", fmt.Errorf("%s", errGitRootDirNotAvailable)
 	}
 
 	branch, err := branchNameFromDirFunc(gitRootDir)
@@ -134,7 +136,7 @@ func commitRefFromDir(inputDir string) (string, error) {
 
 func findCommitRef(gitRootDir string) (string, error) {
 	if gitRootDir == "" {
-		return "", fmt.Errorf("git root directory not available")
+		return "", fmt.Errorf("%s", errGitRootDirNotAvailable)
 	}
 
 	commitRef, err := commitRefFromDirFunc(gitRootDir)
