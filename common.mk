@@ -49,8 +49,8 @@ help:
 
 .PHONY: install-tools
 install-tools: ## Install golangci-lint, gotestsum, code formatters, and tooling defined in tools.go
-	echo ${SHELL}
 	mkdir -p ${GO_BIN}
+	GOBIN=${GO_BIN} go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOCI_LINT_V}
 	@cat tools.go | grep _ | awk -F'"' '{print $$2}' | xargs -tI % sh -c 'GOBIN=${GO_BIN} go install %'
 ifndef CI
 	curl -sSfL 'https://raw.githubusercontent.com/golangci/golangci-lint/${GOCI_LINT_V}/install.sh' | sh -s -- -b ${GO_BIN} ${GOCI_LINT_V}
