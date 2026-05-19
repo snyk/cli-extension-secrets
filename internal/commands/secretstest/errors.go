@@ -17,8 +17,6 @@ const (
 	UnableToInitializeMsg = "Unable to initialize command."
 	UnexpectedErrorMsg    = "An unexpected error occurred."
 	FeatureNotEnabledMsg  = "User not allowed to run without feature flag."
-	JSONNotSupportedMsg   = "Flag --json is not yet supported."
-	SARIFNotSupportedMsg  = "Flag --sarif is not yet supported."
 	NoOrgProvidedMsg      = "No org provided."
 	SingleInputPathMsg    = "Only one input path is accepted."
 	AbsPathFailureMsg     = "Unable to get absolute path."
