@@ -91,9 +91,6 @@ func validateUnsupportedFlags(config configuration.Configuration) error {
 	if config.GetBool(FlagJSON) || config.IsSet(FlagJSONFileOutput) {
 		return cli_errors.NewInvalidFlagOptionError(JSONNotSupportedMsg)
 	}
-	if config.GetBool(FlagSARIF) || config.IsSet(FlagSARIFFileOutput) {
-		return cli_errors.NewInvalidFlagOptionError(SARIFNotSupportedMsg)
-	}
 	return nil
 }
 
