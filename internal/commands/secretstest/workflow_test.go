@@ -58,34 +58,6 @@ func TestSecretsWorkflow_JSONFileOutputNotSupported(t *testing.T) {
 	assert.Contains(t, catalogErr.Detail, "Flag --json is not yet supported.")
 }
 
-func TestSecretsWorkflow_SARIFNotSupported(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
-	mockConfig.Set(FlagSARIF, true)
-	mockIctx := setupMockIctx(ctrl, mockConfig)
-
-	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --sarif is not yet supported.")
-}
-
-func TestSecretsWorkflow_SARIFFileOutputNotSupported(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
-	mockConfig.Set(FlagSARIFFileOutput, "/tmp/output.sarif")
-	mockIctx := setupMockIctx(ctrl, mockConfig)
-
-	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --sarif is not yet supported.")
-}
-
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
