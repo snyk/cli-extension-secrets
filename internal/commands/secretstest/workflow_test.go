@@ -30,34 +30,6 @@ func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
 	assert.Contains(t, catalogErr.Detail, "User not allowed to run without feature flag.")
 }
 
-func TestSecretsWorkflow_JSONNotSupported(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
-	mockConfig.Set(FlagJSON, true)
-	mockIctx := setupMockIctx(ctrl, mockConfig)
-
-	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --json is not yet supported.")
-}
-
-func TestSecretsWorkflow_JSONFileOutputNotSupported(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
-	mockConfig.Set(FlagJSONFileOutput, "/tmp/output.json")
-	mockIctx := setupMockIctx(ctrl, mockConfig)
-
-	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Flag --json is not yet supported.")
-}
-
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
