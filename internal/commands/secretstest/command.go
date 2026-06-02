@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -132,11 +131,14 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 }
 
 // RunWorkflow uploads files, triggers a scan, and returns the formatted results.
+// inputPaths may contain one or more files and/or directories; baseDir is the
+// common directory the uploaded paths are made relative to.
 func (c *Command) RunWorkflow(
 	ctx context.Context,
-	inputPath string,
+	inputPaths []string,
+	baseDir string,
 ) ([]workflow.Data, error) {
-	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPath)
+	uploadRevision, err := c.filterAndUploadFiles(ctx, inputPaths, baseDir)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +158,7 @@ func (c *Command) RunWorkflow(
 	return output, err
 }
 
-func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
+func (c *Command) filterAndUploadFiles(ctx context.Context, inputPaths []string, baseDir string) (string, error) {
 	instrumentation := cmdctx.Instrumentation(ctx)
 
 	textFilesFilter := ff.NewPipeline(
@@ -169,20 +171,10 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		ff.WithLogger(c.Logger),
 		ff.WithAnalytics(instrumentation),
 	)
-	pathsChan := textFilesFilter.Filter(ctx, []string{inputPath})
-
-	// for file inputPath we need to compute the relativity of the file path w.r.t. the file's dir
-	dir := inputPath
-	ok, err := isFile(inputPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to determine if inputPath is a file: %w", err)
-	}
-	if ok {
-		dir = filepath.Dir(inputPath)
-	}
+	pathsChan := textFilesFilter.Filter(ctx, inputPaths)
 
 	uploadStartTime := time.Now()
-	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(ctx, pathsChan, dir)
+	uploadRevision, err := c.Clients.FileUpload.CreateRevisionFromChan(ctx, pathsChan, baseDir)
 	if err != nil {
 		return "", c.ErrorFactory.NewUploadError(err)
 	}

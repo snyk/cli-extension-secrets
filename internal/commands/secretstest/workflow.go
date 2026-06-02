@@ -55,27 +55,34 @@ func SecretsWorkflow(
 	u.SetTitle(TitleValidating)
 	defer u.Clear()
 
-	// validate config and prepare input path
-	orgID, inputPath, err := validateAndPrepareInput(config, errorFactory)
+	// validate config and prepare input paths
+	orgID, inputPaths, err := validateAndPrepareInput(config, errorFactory)
 	if err != nil {
 		return nil, err
 	}
 
+	// collapse all inputs into a single base directory that contains them.
+	// Everything downstream (git context, upload revision) is anchored here.
+	baseDir, err := commonBaseDir(inputPaths)
+	if err != nil {
+		return nil, errorFactory.NewGeneralSecretsFailureError(err, ResolveInputPathMsg)
+	}
+
 	// identify git root and get repo data if available
-	gitRootDir, err := findGitRoot(inputPath)
+	gitRootDir, err := findGitRoot(baseDir)
 	if err != nil {
 		// if the git root dir is not found it means the dir is not a git repo
 		// in case of --report and no target name already set, we need to manually set the target name to the name of the dir
 		// in order to enable target + project creation
 		if config.IsSet(FlagReport) && !config.IsSet(FlagTargetName) {
-			config.Set(FlagTargetName, filepath.Base(inputPath))
+			config.Set(FlagTargetName, filepath.Base(baseDir))
 		}
 
-		logger.Err(err).Str(InputPathKey, inputPath).Msg("could not determine common git root")
+		logger.Err(err).Str(InputPathKey, baseDir).Msg("could not determine common git root")
 	}
 
 	remoteRepoURLFlag := config.GetString(FlagRemoteRepoURL)
-	repoContext := resolveGitContext(inputPath, gitRootDir, remoteRepoURLFlag, logger)
+	repoContext := resolveGitContext(baseDir, gitRootDir, remoteRepoURLFlag, logger)
 
 	// parse excludes
 	excludeGlobs, err := parseExcludeFlag(config)
@@ -105,8 +112,8 @@ func SecretsWorkflow(
 		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnableToInitializeMsg)
 	}
 
-	logger.Info().Str(InputPathKey, inputPath).Msg("Running secrets workflow...")
-	output, err := c.RunWorkflow(ctx, inputPath)
+	logger.Info().Strs(InputPathKey, inputPaths).Msg("Running secrets workflow...")
+	output, err := c.RunWorkflow(ctx, inputPaths, baseDir)
 	if err != nil {
 		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnexpectedErrorMsg)
 	}

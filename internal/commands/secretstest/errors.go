@@ -18,8 +18,8 @@ const (
 	UnexpectedErrorMsg    = "An unexpected error occurred."
 	FeatureNotEnabledMsg  = "User not allowed to run without feature flag."
 	NoOrgProvidedMsg      = "No org provided."
-	SingleInputPathMsg    = "Only one input path is accepted."
 	AbsPathFailureMsg     = "Unable to get absolute path."
+	ResolveInputPathMsg   = "Unable to resolve input paths."
 )
 
 // ErrorFactory creates errors for the Secrets extension.

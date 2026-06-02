@@ -90,7 +90,7 @@ func TestCommand_RunWorkflow_Success(t *testing.T) {
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	// Execute
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	// Assert
 	assert.NoError(t, err)
@@ -123,7 +123,7 @@ func TestCommand_RunWorkflow_ReportWithAllProjectAttributes(t *testing.T) {
 	}
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -161,7 +161,7 @@ func TestCommand_RunWorkflow_ReportWithoutOptionalAttributes(t *testing.T) {
 	cmd.ReportConfig = ReportConfig{Report: true}
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -187,7 +187,7 @@ func TestCommand_RunWorkflow_NoReportOmitsPublishAndAttributes(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -212,7 +212,7 @@ func TestCommand_RunWorkflow_SeverityThresholdSetsLocalPolicy(t *testing.T) {
 	cmd.SeverityThreshold = optionHigh
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -231,7 +231,7 @@ func TestCommand_RunWorkflow_NoSeverityThresholdOmitsLocalPolicy(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -248,7 +248,7 @@ func TestCommand_RunWorkflow_AlwaysSetsSecretsScanConfig(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -267,7 +267,7 @@ func TestCommand_RunWorkflow_PassesCorrectOrgID(t *testing.T) {
 	expectedOrgID := cmd.OrgID
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -286,7 +286,7 @@ func TestCommand_RunWorkflow_ReportWithSeverityThresholdCombined(t *testing.T) {
 	}
 
 	run, ctx := setupSuccessfulRunWithParamCapture(t, ctrl, mockClients, mockUI)
-	output, err := cmd.RunWorkflow(ctx, ".")
+	output, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 
 	require.NoError(t, err)
 	assert.NotEmpty(t, output)
@@ -685,7 +685,7 @@ func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{}, errors.New("upload failed"))
 
-	_, err := cmd.RunWorkflow(ctx, ".")
+	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Cause.Error(), "upload failed")
 }
@@ -705,7 +705,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, ".")
+	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Cause.Error(), "start test failed")
 }
@@ -728,7 +728,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, ".")
+	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Cause.Error(), "wait failed")
 }
@@ -755,7 +755,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) 
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, ".")
+	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Cause.Error(), "test execution error: test completed but findings could not be retrieved")
 }
@@ -786,7 +786,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 
 	mockUI.EXPECT().SetTitle(TitleScanning)
 
-	_, err := cmd.RunWorkflow(ctx, ".")
+	_, err := cmd.RunWorkflow(ctx, []string{"."}, ".")
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Cause.Error(), "scanner error")
 }

@@ -3,6 +3,7 @@ package secretstest
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
@@ -44,19 +46,49 @@ func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	assert.Contains(t, catalogErr.Detail, "No org provided.")
 }
 
-func TestSecretsWorkflow_TooManyInputPaths(t *testing.T) {
+func TestValidateAndPrepareInput_NoInputPathDefaultsToCurrentDir(t *testing.T) {
+	mockConfig := configuration.New()
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{})
+
+	nopLogger := zerolog.Nop()
+	errorFactory := NewErrorFactory(&nopLogger)
+
+	_, inputPaths, err := validateAndPrepareInput(mockConfig, errorFactory)
+	require.NoError(t, err)
+	require.Len(t, inputPaths, 1)
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	assert.Equal(t, cwd, inputPaths[0],
+		"with no input path the workflow should default to the current directory")
+}
+
+func TestSecretsWorkflow_MultipleInputPaths_NonGitRepo_ReportSetsTargetNameToBaseDir(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	tmpDir := t.TempDir()
+	subA := filepath.Join(tmpDir, "a")
+	subB := filepath.Join(tmpDir, "b")
+	require.NoError(t, os.MkdirAll(subA, 0o750))
+	require.NoError(t, os.MkdirAll(subB, 0o750))
 
 	mockConfig := configuration.New()
 	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
-	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{".", "other path"})
-	mockIctx := setupMockIctx(ctrl, mockConfig)
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{subA, subB})
+	mockConfig.Set(FlagReport, true)
 
-	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
-	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "Only one input path is accepted.")
+	mockIctx := setupMockIctxWithNetworkAccess(ctrl, mockConfig)
+
+	// Multiple paths are accepted; they collapse to their common ancestor
+	// directory, so the report target name falls back to that base dir.
+	_, _ = SecretsWorkflow(mockIctx, []workflow.Data{})
+
+	assert.Equal(t, filepath.Base(tmpDir), mockConfig.GetString(FlagTargetName),
+		"target-name should fall back to the common base directory for multiple non-git inputs")
 }
 
 func TestSecretsWorkflow_InvalidFlags(t *testing.T) {

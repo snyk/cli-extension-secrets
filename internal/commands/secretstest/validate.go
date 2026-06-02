@@ -54,32 +54,37 @@ type flagWithOptions struct {
 func validateAndPrepareInput(
 	config configuration.Configuration,
 	errorFactory *ErrorFactory,
-) (orgID, inputPath string, err error) {
+) (orgID string, inputPaths []string, err error) {
 	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
-		return "", "", errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
+		return "", nil, errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
 	orgID = config.GetString(configuration.ORGANIZATION)
 	if orgID == "" {
-		return "", "", errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
+		return "", nil, errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
 	}
 
 	if e := validateFlagsConfig(config); e != nil {
-		return "", "", errorFactory.NewValidationFailureError(e.Error())
+		return "", nil, errorFactory.NewValidationFailureError(e.Error())
 	}
 
-	inputPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
-	if len(inputPaths) != 1 {
-		return "", "", errorFactory.NewValidationFailureError(SingleInputPathMsg)
+	rawPaths := config.GetStringSlice(configuration.INPUT_DIRECTORY)
+	if len(rawPaths) == 0 {
+		// No path provided: default to scanning the current directory.
+		rawPaths = []string{"."}
 	}
 
-	absPath, e := filepath.Abs(inputPaths[0])
-	if e != nil {
-		absErr := fmt.Errorf("could not get absolute path '%s': %w", inputPaths[0], e)
-		return "", "", errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
+	absPaths := make([]string, 0, len(rawPaths))
+	for _, rawPath := range rawPaths {
+		absPath, e := filepath.Abs(rawPath)
+		if e != nil {
+			absErr := fmt.Errorf("could not get absolute path '%s': %w", rawPath, e)
+			return "", nil, errorFactory.NewGeneralSecretsFailureError(absErr, AbsPathFailureMsg)
+		}
+		absPaths = append(absPaths, sanitizePath(absPath))
 	}
 
-	return orgID, sanitizePath(absPath), nil
+	return orgID, absPaths, nil
 }
 
 func validateFlagsConfig(config configuration.Configuration) error {

@@ -1,11 +1,14 @@
 package secretstest
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateFlagValue(t *testing.T) {
@@ -756,4 +759,51 @@ func TestValidateFileOutputPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCommonBaseDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	subA := filepath.Join(tmpDir, "a")
+	subB := filepath.Join(tmpDir, "b")
+	require.NoError(t, os.MkdirAll(subA, 0o750))
+	require.NoError(t, os.MkdirAll(subB, 0o750))
+
+	fileInA := filepath.Join(subA, "file.txt")
+	require.NoError(t, os.WriteFile(fileInA, []byte("x"), 0o600))
+	fileInB := filepath.Join(subB, "file.txt")
+	require.NoError(t, os.WriteFile(fileInB, []byte("y"), 0o600))
+
+	t.Run("single directory returns itself", func(t *testing.T) {
+		base, err := commonBaseDir([]string{subA})
+		require.NoError(t, err)
+		assert.Equal(t, subA, base)
+	})
+
+	t.Run("single file returns its parent directory", func(t *testing.T) {
+		base, err := commonBaseDir([]string{fileInA})
+		require.NoError(t, err)
+		assert.Equal(t, subA, base)
+	})
+
+	t.Run("multiple files collapse to common ancestor", func(t *testing.T) {
+		base, err := commonBaseDir([]string{fileInA, fileInB})
+		require.NoError(t, err)
+		assert.Equal(t, tmpDir, base)
+	})
+
+	t.Run("mixed file and directory collapse to common ancestor", func(t *testing.T) {
+		base, err := commonBaseDir([]string{fileInA, subB})
+		require.NoError(t, err)
+		assert.Equal(t, tmpDir, base)
+	})
+
+	t.Run("empty input returns an error", func(t *testing.T) {
+		_, err := commonBaseDir(nil)
+		require.Error(t, err)
+	})
+
+	t.Run("non-existent path returns an error", func(t *testing.T) {
+		_, err := commonBaseDir([]string{filepath.Join(tmpDir, "does-not-exist")})
+		require.Error(t, err)
+	})
 }
