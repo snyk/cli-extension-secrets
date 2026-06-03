@@ -2,6 +2,7 @@
 package secretstest
 
 import (
+	"fmt"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-application-framework/pkg/analytics"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
@@ -28,6 +30,52 @@ func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Detail, "User not allowed to run without feature flag.")
+}
+
+func TestSecretsWorkflow_FFResolutionAuthError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Simulate the feature flag resolution failing with an authentication error,
+	// as happens when the user is not authenticated (the network middleware maps a
+	// 401/403 to the SNYK-0005 authentication error).
+	authErr := snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+
+	mockConfig := configuration.New()
+	mockConfig.AddDefaultValue(FeatureFlagIsSecretsEnabled, func(_ configuration.Configuration, _ any) (any, error) {
+		return false, fmt.Errorf("unable to retrieve feature flag: %w", authErr)
+	})
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	catalogErr := requireCatalogError(t, err)
+	assert.Equal(t, "SNYK-0005", catalogErr.ErrorCode,
+		"an unauthenticated user should get the authentication error, not feature-not-enabled")
+	assert.NotContains(t, catalogErr.Detail, FeatureNotEnabledMsg,
+		"an auth error from the feature-flag check must never be masked as feature-not-enabled")
+}
+
+func TestSecretsWorkflow_OrgResolutionAuthError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// When the user is unauthenticated, resolving the organization
+	// performs an authenticated API call that fails (the network middleware maps
+	// a 401/403 to the SNYK-0005 authentication error). This must surface
+	// as the authentication error rather than being flattened to
+	// an empty org and reported as a generic failure
+	authErr := snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+
+	mockConfig := configuration.New()
+	mockConfig.AddDefaultValue(configuration.ORGANIZATION, func(_ configuration.Configuration, _ any) (any, error) {
+		return "", fmt.Errorf("unable to retrieve org ID: %w", authErr)
+	})
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	catalogErr := requireCatalogError(t, err)
+	assert.Equal(t, "SNYK-0005", catalogErr.ErrorCode,
+		"an unauthenticated user should get the authentication error, not a generic failure")
 }
 
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {

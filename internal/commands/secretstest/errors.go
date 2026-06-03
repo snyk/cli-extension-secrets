@@ -17,6 +17,8 @@ const (
 	UnableToInitializeMsg = "Unable to initialize command."
 	UnexpectedErrorMsg    = "An unexpected error occurred."
 	FeatureNotEnabledMsg  = "User not allowed to run without feature flag."
+	FeatureFlagCheckMsg   = "Unable to check if the Secrets feature is enabled."
+	OrgResolutionMsg      = "Unable to determine the organization."
 	NoOrgProvidedMsg      = "No org provided."
 	SingleInputPathMsg    = "Only one input path is accepted."
 	AbsPathFailureMsg     = "Unable to get absolute path."
@@ -57,6 +59,18 @@ func (ef *ErrorFactory) NewPrepareOutputError(err error) error {
 // NewGeneralSecretsFailureError wraps a generic secrets workflow failure.
 func (ef *ErrorFactory) NewGeneralSecretsFailureError(err error, msg string) error {
 	return ef.ensureCatalogError(err, msg)
+}
+
+// NewFeatureFlagError wraps a failure to resolve the secrets feature flag.
+// Resolving the flag triggers an authenticated API call,
+// so the underlying error is often an authentication failure.
+func (ef *ErrorFactory) NewFeatureFlagError(err error) error {
+	return ef.ensureCatalogError(err, FeatureFlagCheckMsg)
+}
+
+// NewOrgResolutionError wraps a failure to resolve the organization.
+func (ef *ErrorFactory) NewOrgResolutionError(err error) error {
+	return ef.ensureCatalogError(err, OrgResolutionMsg)
 }
 
 // NewFeatureNotEnabledError returns an error indicating the feature flag is disabled.
