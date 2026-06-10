@@ -33,8 +33,15 @@ func streamAllowedFiles(
 			}
 
 			maxThreadCount := runtime.NumCPU()
-			// Initialize the file walker/filter
-			filter := utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount))
+			// Initialize the file walker/filter, honoring the "global" and "secrets"
+			// sections of any .snyk file (the framework defaults to "global" and "code").
+			filter := utils.NewFileFilter(
+				rootPath,
+				logger,
+				utils.WithThreadNumber(maxThreadCount),
+				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.Global, utils.Secrets}),
+			)
+
 
 			// Get rules from the passed filenames
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)

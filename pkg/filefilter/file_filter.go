@@ -10,9 +10,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const gitIgnoreFile = ".gitignore"
+const (
+	gitIgnoreFile = ".gitignore"
+	dotSnykFile   = ".snyk"
+)
 
-var ignoreFiles = []string{gitIgnoreFile}
+var ignoreFiles = []string{gitIgnoreFile, dotSnykFile}
 
 // FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {
@@ -97,6 +100,7 @@ func WithExcludeGlobs(userPatterns []string) Option {
 func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
 	filterStart := time.Now()
 	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
+
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)

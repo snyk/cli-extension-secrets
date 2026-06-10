@@ -1,6 +1,6 @@
 module github.com/snyk/cli-extension-secrets
 
-go 1.25.0
+go 1.26
 
 require (
 	github.com/go-git/go-git/v5 v5.19.1
@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260205094614-116c03822905
-	github.com/snyk/go-application-framework v0.0.0-20260511100036-100e7116aec5
+	github.com/snyk/go-application-framework v0.3.1-0.20260609120105-38773ce94512
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 )
