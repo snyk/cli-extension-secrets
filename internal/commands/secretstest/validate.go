@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 
 	ff "github.com/snyk/cli-extension-secrets/pkg/filefilter"
@@ -55,11 +56,26 @@ func validateAndPrepareInput(
 	config configuration.Configuration,
 	errorFactory *ErrorFactory,
 ) (orgID, inputPath string, err error) {
-	if !config.GetBool(FeatureFlagIsSecretsEnabled) {
+	// Resolve the org with the error-aware accessor.
+	orgID, e := config.GetStringWithError(configuration.ORGANIZATION)
+	if e != nil {
+		// Only abort when org resolution surfaced a real
+		// catalog error (a 401 mapped to SNYK-0005)
+		var snykErr snyk_errors.Error
+		if errors.As(e, &snykErr) {
+			return "", "", errorFactory.NewOrgResolutionError(e)
+		}
+		orgID = ""
+	}
+
+	enabled, e := config.GetBoolWithError(FeatureFlagIsSecretsEnabled)
+	if e != nil {
+		return "", "", errorFactory.NewFeatureFlagError(e)
+	}
+	if !enabled {
 		return "", "", errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
 	}
 
-	orgID = config.GetString(configuration.ORGANIZATION)
 	if orgID == "" {
 		return "", "", errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
 	}
