@@ -101,7 +101,6 @@ func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string 
 	filterStart := time.Now()
 	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
 
-
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)
 	var wg sync.WaitGroup

@@ -42,7 +42,6 @@ func streamAllowedFiles(
 				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.Global, utils.Secrets}),
 			)
 
-
 			// Get rules from the passed filenames
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)
 			if err != nil {
