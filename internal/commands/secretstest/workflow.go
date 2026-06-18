@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"path/filepath"
 
+	"github.com/snyk/cli-extension-secrets/internal/clients/settings"
 	"github.com/snyk/cli-extension-secrets/internal/commands/cmdctx"
 	"github.com/snyk/cli-extension-secrets/internal/instrumentation"
 
@@ -17,7 +18,10 @@ import (
 // Workflow configuration keys.
 const (
 	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
-	InputPathKey                = "inputPath"
+	// SecretsSettingsEnabled resolves to whether the Secrets feature is enabled for
+	// the org, sourced from the REST settings endpoint rather than a feature flag.
+	SecretsSettingsEnabled = "internal_secrets_settings_secrets_enabled" //nolint:gosec // config key
+	InputPathKey           = "inputPath"
 )
 
 // WorkflowID is the unique identifier for the secrets test workflow.
@@ -35,7 +39,38 @@ func RegisterWorkflows(e workflow.Engine) error {
 
 	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsSecretsEnabled, "isSecretsEnabled")
 
+	addSecretsSettingsToConfig(e, SecretsSettingsEnabled)
+
 	return nil
+}
+
+// addSecretsSettingsToConfig registers a lazily-resolved config value that reports
+// whether the Secrets feature is enabled for the org, sourced from the REST
+// settings endpoint (/rest/orgs/{org_id}/settings/secrets). The lookup is performed
+// on first read using an org-scoped network client, mirroring the feature-flag
+// resolution pattern.
+func addSecretsSettingsToConfig(e workflow.Engine, configKey string) {
+	config := e.GetConfiguration()
+	if err := config.AddKeyDependency(configKey, configuration.ORGANIZATION); err != nil {
+		e.GetLogger().Err(err).Msgf("Failed to add dependency for %s", configKey)
+	}
+
+	config.AddDefaultValue(configKey, func(c configuration.Configuration, existingValue any) (any, error) {
+		if existingValue != nil {
+			return existingValue, nil
+		}
+
+		localNetworkStack := e.GetNetworkAccess().Clone()
+		localNetworkStack.SetConfiguration(c)
+		httpClient := localNetworkStack.GetHttpClient()
+
+		client := settings.NewClient(
+			httpClient,
+			c.GetString(configuration.API_URL),
+			c.GetString(configuration.ORGANIZATION),
+		)
+		return client.IsSecretsEnabled(context.Background())
+	})
 }
 
 // SecretsWorkflow is the entry point for the secrets test workflow.

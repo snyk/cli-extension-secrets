@@ -1,12 +1,149 @@
 package secretstest
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"github.com/snyk/error-catalog-golang-public/snyk"
 	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// TestValidateAndPrepareInput_SecretsEnablement covers the "feature flag OR
+// settings" enablement gate in validateAndPrepareInput: the feature flag can
+// short-circuit to "enabled", otherwise the REST setting is authoritative and
+// its lookup errors are surfaced rather than masked as "feature not enabled".
+func TestValidateAndPrepareInput_SecretsEnablement(t *testing.T) {
+	orgID := uuid.New().String()
+
+	// returnErr builds a default-value callback that fails resolution, mimicking
+	// a feature-flag / settings lookup that errors (e.g. an API call failure).
+	returnErr := func(err error) func(configuration.Configuration, any) (any, error) {
+		return func(_ configuration.Configuration, _ any) (any, error) {
+			return false, fmt.Errorf("lookup failed: %w", err)
+		}
+	}
+	authErr := snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
+
+	testCases := []struct {
+		desc        string
+		setup       func(c configuration.Configuration)
+		wantEnabled bool   // true => enablement gate passes (validation succeeds)
+		wantErrCode string // expected catalog ErrorCode when the gate blocks
+		wantDetail  string // expected substring in the catalog error Detail
+	}{
+		{
+			desc: "feature flag enabled, setting disabled -> enabled",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, true)
+				c.Set(SecretsSettingsEnabled, false)
+			},
+			wantEnabled: true,
+		},
+		{
+			desc: "feature flag disabled, setting enabled -> enabled",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, false)
+				c.Set(SecretsSettingsEnabled, true)
+			},
+			wantEnabled: true,
+		},
+		{
+			desc: "feature flag enabled, setting enabled -> enabled",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, true)
+				c.Set(SecretsSettingsEnabled, true)
+			},
+			wantEnabled: true,
+		},
+		{
+			desc: "feature flag disabled, setting disabled -> not enabled",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, false)
+				c.Set(SecretsSettingsEnabled, false)
+			},
+			wantErrCode: "SNYK-CLI-0016",
+			wantDetail:  fmt.Sprintf(FeatureNotEnabledMsg, orgID),
+		},
+		{
+			desc: "feature flag errors, setting enabled -> enabled (flag error ignored)",
+			setup: func(c configuration.Configuration) {
+				c.AddDefaultValue(FeatureFlagIsSecretsEnabled, returnErr(authErr))
+				c.Set(SecretsSettingsEnabled, true)
+			},
+			wantEnabled: true,
+		},
+		{
+			desc: "feature flag errors, setting disabled -> not enabled",
+			setup: func(c configuration.Configuration) {
+				c.AddDefaultValue(FeatureFlagIsSecretsEnabled, returnErr(authErr))
+				c.Set(SecretsSettingsEnabled, false)
+			},
+			wantErrCode: "SNYK-CLI-0016",
+			wantDetail:  fmt.Sprintf(FeatureNotEnabledMsg, orgID),
+		},
+		{
+			desc: "feature flag disabled, setting errors with auth error -> surfaces auth error",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, false)
+				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(authErr))
+			},
+			wantErrCode: "SNYK-0005",
+		},
+		{
+			desc: "feature flag disabled, setting errors with generic error -> wrapped check error",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, false)
+				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(errors.New("boom")))
+			},
+			wantDetail: SecretsEnabledCheckMsg,
+		},
+		{
+			desc: "feature flag enabled short-circuits the failing setting lookup -> enabled",
+			setup: func(c configuration.Configuration) {
+				c.Set(FeatureFlagIsSecretsEnabled, true)
+				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(errors.New("boom")))
+			},
+			wantEnabled: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			config := configuration.New()
+			config.Set(configuration.ORGANIZATION, orgID)
+			config.Set(configuration.INPUT_DIRECTORY, []string{"."})
+			tc.setup(config)
+
+			logger := zerolog.Nop()
+			errorFactory := NewErrorFactory(&logger)
+
+			gotOrgID, gotPath, err := validateAndPrepareInput(config, errorFactory)
+
+			if tc.wantEnabled {
+				require.NoError(t, err, "enablement gate should pass and validation should succeed")
+				assert.Equal(t, orgID, gotOrgID)
+				assert.NotEmpty(t, gotPath)
+				return
+			}
+
+			catalogErr := requireCatalogError(t, err)
+			if tc.wantErrCode != "" {
+				assert.Equal(t, tc.wantErrCode, catalogErr.ErrorCode)
+			}
+			if tc.wantDetail != "" {
+				assert.Contains(t, catalogErr.Detail, tc.wantDetail)
+			}
+			assert.NotContains(t, catalogErr.Detail, SingleInputPathMsg,
+				"the enablement gate should block before reaching later validation")
+		})
+	}
+}
 
 func TestValidateFlagValue(t *testing.T) {
 	type testInput struct {

@@ -19,31 +19,34 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSecretsWorkflow_FFIsFalse(t *testing.T) {
+func TestSecretsWorkflow_SettingsDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	orgID := uuid.New().String()
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, false)
+	mockConfig.Set(configuration.ORGANIZATION, orgID)
+	mockConfig.Set(SecretsSettingsEnabled, false)
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, "User not allowed to run without feature flag.")
+	assert.Contains(t, catalogErr.Detail, fmt.Sprintf(FeatureNotEnabledMsg, orgID))
 }
 
-func TestSecretsWorkflow_FFResolutionAuthError(t *testing.T) {
+func TestSecretsWorkflow_SettingsResolutionAuthError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Simulate the feature flag resolution failing with an authentication error,
+	// Simulate the secrets settings resolution failing with an authentication error,
 	// as happens when the user is not authenticated (the network middleware maps a
-	// 401/403 to the SNYK-0005 authentication error).
+	// 401 to the SNYK-0005 authentication error).
 	authErr := snyk.NewUnauthorisedError("Use `snyk auth` to authenticate.")
 
 	mockConfig := configuration.New()
-	mockConfig.AddDefaultValue(FeatureFlagIsSecretsEnabled, func(_ configuration.Configuration, _ any) (any, error) {
-		return false, fmt.Errorf("unable to retrieve feature flag: %w", authErr)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.AddDefaultValue(SecretsSettingsEnabled, func(_ configuration.Configuration, _ any) (any, error) {
+		return false, fmt.Errorf("unable to read secrets settings: %w", authErr)
 	})
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
@@ -51,8 +54,8 @@ func TestSecretsWorkflow_FFResolutionAuthError(t *testing.T) {
 	catalogErr := requireCatalogError(t, err)
 	assert.Equal(t, "SNYK-0005", catalogErr.ErrorCode,
 		"an unauthenticated user should get the authentication error, not feature-not-enabled")
-	assert.NotContains(t, catalogErr.Detail, FeatureNotEnabledMsg,
-		"an auth error from the feature-flag check must never be masked as feature-not-enabled")
+	assert.NotContains(t, catalogErr.Detail, "is not supported for org",
+		"an auth error from the settings check must never be masked as feature-not-enabled")
 }
 
 func TestSecretsWorkflow_OrgResolutionAuthError(t *testing.T) {
@@ -78,12 +81,32 @@ func TestSecretsWorkflow_OrgResolutionAuthError(t *testing.T) {
 		"an unauthenticated user should get the authentication error, not a generic failure")
 }
 
+func TestSecretsWorkflow_FFEnablesWhenSettingDisabled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// The legacy feature flag must still enable the workflow even when the
+	// REST setting reports it disabled (enablement is "FF OR setting"). With a
+	// valid org and the feature flag on, validation should advance past the
+	// enablement gate and fail later (here, on the missing input path).
+	mockConfig := configuration.New()
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, false)
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, SingleInputPathMsg,
+		"the feature flag should pass the enablement gate even when the setting is disabled")
+}
+
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, "")
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
@@ -97,7 +120,7 @@ func TestSecretsWorkflow_TooManyInputPaths(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
 	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{".", "other path"})
 	mockIctx := setupMockIctx(ctrl, mockConfig)
@@ -112,7 +135,7 @@ func TestSecretsWorkflow_InvalidFlags(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
 	mockConfig.Set(FlagSeverityThreshold, "invalid-value")
 	mockIctx := setupMockIctx(ctrl, mockConfig)
@@ -129,7 +152,7 @@ func TestSecretsWorkflow_NonGitRepo_ReportWithoutTargetName(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
 	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
 	mockConfig.Set(FlagReport, true)
@@ -150,7 +173,7 @@ func TestSecretsWorkflow_NonGitRepo_ReportWithTargetName(t *testing.T) {
 	userTargetName := "my-custom-project-name"
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
 	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
 	mockConfig.Set(FlagReport, true)
@@ -171,7 +194,7 @@ func TestSecretsWorkflow_NonGitRepo_WithoutReport(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	mockConfig := configuration.New()
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockConfig.Set(SecretsSettingsEnabled, true)
 	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
 	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
 
