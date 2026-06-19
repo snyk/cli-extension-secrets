@@ -67,17 +67,25 @@ func validateAndPrepareInput(
 		}
 		orgID = ""
 	}
-
-	enabled, e := config.GetBoolWithError(FeatureFlagIsSecretsEnabled)
-	if e != nil {
-		return "", "", errorFactory.NewFeatureFlagError(e)
-	}
-	if !enabled {
-		return "", "", errorFactory.NewFeatureNotEnabledError(FeatureNotEnabledMsg)
-	}
-
 	if orgID == "" {
 		return "", "", errorFactory.NewValidationFailureError(NoOrgProvidedMsg)
+	}
+
+	// Secrets is enabled when either the legacy feature flag enables it OR the
+	// org's Secrets setting reports it enabled. The feature flag can only
+	// short-circuit to "enabled"; otherwise the REST setting is authoritative,
+	// and its lookup errors (e.g. a 401 mapped to SNYK-0005) are surfaced rather
+	// than masked as "feature not enabled".
+	ffEnabled, ffErr := config.GetBoolWithError(FeatureFlagIsSecretsEnabled)
+	if ffErr != nil || !ffEnabled {
+		settingsEnabled, settingsErr := config.GetBoolWithError(SecretsSettingsEnabled)
+		if settingsErr != nil {
+			return "", "", errorFactory.NewSecretsEnabledCheckError(settingsErr)
+		}
+		if !settingsEnabled {
+			msg := fmt.Sprintf(FeatureNotEnabledMsg, orgID)
+			return "", "", errorFactory.NewFeatureNotEnabledError(msg)
+		}
 	}
 
 	if e := validateFlagsConfig(config); e != nil {

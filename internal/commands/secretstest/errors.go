@@ -14,14 +14,14 @@ import (
 
 // User-facing error messages.
 const (
-	UnableToInitializeMsg = "Unable to initialize command."
-	UnexpectedErrorMsg    = "An unexpected error occurred."
-	FeatureNotEnabledMsg  = "User not allowed to run without feature flag."
-	FeatureFlagCheckMsg   = "Unable to check if the Secrets feature is enabled."
-	OrgResolutionMsg      = "Unable to determine the organization."
-	NoOrgProvidedMsg      = "No org provided."
-	SingleInputPathMsg    = "Only one input path is accepted."
-	AbsPathFailureMsg     = "Unable to get absolute path."
+	UnableToInitializeMsg  = "Unable to initialize command."
+	UnexpectedErrorMsg     = "An unexpected error occurred."
+	FeatureNotEnabledMsg   = "Snyk Secrets is not supported for org %s: enable it in Settings > Snyk Secrets"
+	SecretsEnabledCheckMsg = "Unable to check if the Secrets feature is enabled."
+	OrgResolutionMsg       = "Unable to determine the organization."
+	NoOrgProvidedMsg       = "No org provided."
+	SingleInputPathMsg     = "Only one input path is accepted."
+	AbsPathFailureMsg      = "Unable to get absolute path."
 )
 
 // ErrorFactory creates errors for the Secrets extension.
@@ -61,11 +61,11 @@ func (ef *ErrorFactory) NewGeneralSecretsFailureError(err error, msg string) err
 	return ef.ensureCatalogError(err, msg)
 }
 
-// NewFeatureFlagError wraps a failure to resolve the secrets feature flag.
-// Resolving the flag triggers an authenticated API call,
-// so the underlying error is often an authentication failure.
-func (ef *ErrorFactory) NewFeatureFlagError(err error) error {
-	return ef.ensureCatalogError(err, FeatureFlagCheckMsg)
+// NewSecretsEnabledCheckError wraps a failure to resolve the Secrets settings.
+// Resolving the setting triggers an authenticated API call to the REST
+// settings endpoint, so the underlying error is often an authentication failure.
+func (ef *ErrorFactory) NewSecretsEnabledCheckError(err error) error {
+	return ef.ensureCatalogError(err, SecretsEnabledCheckMsg)
 }
 
 // NewOrgResolutionError wraps a failure to resolve the organization.
