@@ -14,6 +14,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	gafclientmocks "github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 
@@ -38,6 +39,7 @@ func TestCommand_RunWorkflow_Success(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{RevisionID: uuid.New()}, nil)
@@ -428,6 +430,7 @@ func TestPrepareOutput_NoReport_ReturnsFindingsInOutput(t *testing.T) {
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	findingContent, err := os.ReadFile("./testdata/finding.json")
@@ -472,6 +475,7 @@ func TestPrepareOutput_NoReport_ReturnsOutputWithoutReportURL(t *testing.T) {
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
@@ -510,6 +514,7 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
@@ -546,6 +551,7 @@ func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T)
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
@@ -577,6 +583,7 @@ func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
 	mockTestResult := gafclientmocks.NewMockTestResult(ctrl)
@@ -681,6 +688,7 @@ func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 	mockClients, _, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{}, errors.New("upload failed"))
@@ -697,6 +705,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).Return(fileupload.UploadResult{RevisionID: uuid.New()}, nil)
@@ -717,6 +726,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	handle := gafclientmocks.NewMockTestHandle(ctrl)
@@ -740,6 +750,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	handle := gafclientmocks.NewMockTestHandle(ctrl)
@@ -767,6 +778,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	handle := gafclientmocks.NewMockTestHandle(ctrl)
@@ -833,6 +845,7 @@ func setupSuccessfulRunWithParamCapture(
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
+	mockIctx.EXPECT().GetConfiguration().Return(configuration.NewInMemory()).AnyTimes()
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
 	mockUploadClient.EXPECT().CreateRevisionFromChan(gomock.Any(), gomock.Any(), gomock.Any()).

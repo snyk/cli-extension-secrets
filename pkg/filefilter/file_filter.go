@@ -28,11 +28,12 @@ type Analytics interface {
 
 // Pipeline holds the configuration for the filtering process.
 type Pipeline struct {
-	logger             *zerolog.Logger
-	concurrency        int
-	filters            []FileFilter
-	customGlobPatterns []string
-	analytics          Analytics
+	logger                 *zerolog.Logger
+	concurrency            int
+	filters                []FileFilter
+	customGlobPatterns     []string
+	analytics              Analytics
+	enableMetacharacterFix bool
 }
 
 // Option defines the functional option type.
@@ -92,11 +93,19 @@ func WithExcludeGlobs(userPatterns []string) Option {
 	}
 }
 
+// WithIgnoreRuleMetacharacterFix toggles GAF's fix for ignore rules/paths containing regex
+// metacharacters. Disabled (the default) reproduces the legacy behavior.
+func WithIgnoreRuleMetacharacterFix(enabled bool) Option {
+	return func(p *Pipeline) {
+		p.enableMetacharacterFix = enabled
+	}
+}
+
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
 func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
 	filterStart := time.Now()
-	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.enableMetacharacterFix, p.logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)

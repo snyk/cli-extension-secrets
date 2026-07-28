@@ -38,6 +38,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 	}
 
 	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsSecretsEnabled, "isSecretsEnabled")
+	config_utils.AddFeatureFlagToConfig(e, configuration.FF_FILE_FILTER_METACHARACTER_FIX, configuration.SNYK_FILE_FILTER_METACHARACTER_FIX)
 
 	addSecretsSettingsToConfig(e, SecretsSettingsEnabled)
 
