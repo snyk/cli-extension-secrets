@@ -14,6 +14,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 
@@ -159,6 +160,11 @@ func (c *Command) RunWorkflow(
 func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
 	instrumentation := cmdctx.Instrumentation(ctx)
 
+	var enableMetacharacterFix bool
+	if ictx := cmdctx.Ictx(ctx); ictx != nil {
+		enableMetacharacterFix = ictx.GetConfiguration().GetBool(configuration.FF_FILE_FILTER_METACHARACTER_FIX)
+	}
+
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
 		ff.WithExcludeGlobs(c.Excludes),
@@ -168,6 +174,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		),
 		ff.WithLogger(c.Logger),
 		ff.WithAnalytics(instrumentation),
+		ff.WithIgnoreRuleMetacharacterFix(enableMetacharacterFix),
 	)
 	pathsChan := textFilesFilter.Filter(ctx, []string{inputPath})
 

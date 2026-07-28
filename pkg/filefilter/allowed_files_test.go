@@ -89,7 +89,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		ctx := context.Background()
 
 		// Pass "." to simulate running from CLI root.
-		stream := streamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, getCustomGlobIgnoreRules(), false, &logger)
 		results := collectStream(stream, ".")
 
 		// Assert
@@ -125,7 +125,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 
 		ctx := context.Background()
 
-		stream := streamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{"."}, []string{".gitignore"}, getCustomGlobIgnoreRules(), false, &logger)
 		results := collectStream(stream, ".")
 
 		if len(results) != 1 || results[0] != "code.go" {
@@ -143,7 +143,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		dirB := setupTempDir(t, filesB)
 
 		ctx := context.Background()
-		stream := streamAllowedFiles(ctx, []string{dirA, dirB}, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{dirA, dirB}, []string{".gitignore"}, getCustomGlobIgnoreRules(), false, &logger)
 
 		// Collect results using Base name to ignore path prefix differences.
 		var results []string
@@ -179,7 +179,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		// Input: one directory and one specific file.
 		// Note: Absolute paths used here.
 		inputs := []string{dir1, rootFile}
-		stream := streamAllowedFiles(ctx, inputs, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, inputs, []string{".gitignore"}, getCustomGlobIgnoreRules(), false, &logger)
 
 		var results []string
 		for p := range stream {
@@ -213,7 +213,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		fileB := filepath.Join(rootDir, "fileB.txt")
 
 		ctx := context.Background()
-		stream := streamAllowedFiles(ctx, []string{fileA, fileB}, nil, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{fileA, fileB}, nil, getCustomGlobIgnoreRules(), false, &logger)
 
 		var results []string
 		for p := range stream {
@@ -241,7 +241,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		rootDir := setupTempDir(t, files)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		stream := streamAllowedFiles(ctx, []string{rootDir}, []string{".gitignore"}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{rootDir}, []string{".gitignore"}, getCustomGlobIgnoreRules(), false, &logger)
 		cancel()
 
 		count := 0
@@ -279,7 +279,7 @@ func TestStreamAllowedFiles_Timeout(t *testing.T) {
 
 	logger := zerolog.Nop()
 	start := time.Now()
-	stream := streamAllowedFiles(ctx, []string{rootDir}, nil, getCustomGlobIgnoreRules(), &logger)
+	stream := streamAllowedFiles(ctx, []string{rootDir}, nil, getCustomGlobIgnoreRules(), false, &logger)
 
 	// Drain the channel
 	count := 0

@@ -17,6 +17,7 @@ func streamAllowedFiles(
 	inputPaths []string,
 	ignoreFilenames []string,
 	customGlobPatterns []string,
+	enableMetacharacterFix bool,
 	logger *zerolog.Logger,
 ) chan string {
 	// Create the merged output channel
@@ -34,7 +35,7 @@ func streamAllowedFiles(
 
 			maxThreadCount := runtime.NumCPU()
 			// Initialize the file walker/filter
-			filter := utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount))
+			filter := utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount), utils.WithIgnoreRuleMetacharacterFix(enableMetacharacterFix))
 
 			// Get rules from the passed filenames
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)
