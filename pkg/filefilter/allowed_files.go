@@ -39,7 +39,7 @@ func streamAllowedFiles(
 				rootPath,
 				logger,
 				utils.WithThreadNumber(maxThreadCount),
-				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.Global, utils.Secrets}),
+				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.DotSnykExcludeGlobal, utils.DotSnykExcludeSecrets}),
 			)
 
 			// Get rules from the passed filenames
