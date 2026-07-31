@@ -49,12 +49,14 @@ workflows:
           name: Scan repository for secrets
           context:
             - snyk-bot-slack
+            - prodsec-orb-runtime
           channel: iac-plus-alerts
           trusted-branch: main
       - security-scans:
           name: Security Scans
           context:
             - analysis-iac
+            - prodsec-orb-runtime
       - unit-test:
           name: Unit Test
       - windows-test:
