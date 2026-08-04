@@ -290,6 +290,7 @@ func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configurati
 	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
 	mockIctx.EXPECT().GetAnalytics().Return(analyticsProvider).AnyTimes()
+	expectFileFilter(mockIctx, mockConfig)
 
 	mockUserInterface.EXPECT().NewProgressBar().Return(mockProgressBar)
 	mockProgressBar.EXPECT().SetTitle("Validating configuration...")

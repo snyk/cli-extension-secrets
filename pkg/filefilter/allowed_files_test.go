@@ -10,8 +10,35 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
+	"github.com/stretchr/testify/assert"
 )
+
+// getTestInvocationContext returns an invocation context whose GetFileFilter builds a real FileFilter
+// the way the framework does, so file filtering is exercised rather than stubbed.
+func getTestInvocationContext(t *testing.T) workflow.InvocationContext {
+	t.Helper()
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+
+	mockIctx := mocks.NewMockInvocationContext(gomock.NewController(t))
+	mockIctx.EXPECT().GetFileFilter(gomock.Any(), gomock.Any()).DoAndReturn(getFileFilterFunc(&logger, config)).AnyTimes()
+
+	return mockIctx
+}
+
+// getFileFilterFunc returns a GetFileFilter implementation that builds a real FileFilter the way the
+// framework does, so file filtering is exercised rather than stubbed.
+func getFileFilterFunc(logger *zerolog.Logger, config configuration.Configuration) func(string, ...utils.FileFilterOption) *utils.FileFilter {
+	return func(path string, options ...utils.FileFilterOption) *utils.FileFilter {
+		return utils.NewFileFilter(path, logger, append([]utils.FileFilterOption{utils.WithConfig(config)}, options...)...)
+	}
+}
 
 // setupTempDir creates a temporary directory populated with the provided file map.
 func setupTempDir(t *testing.T, files map[string]string) string {
@@ -89,7 +116,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		ctx := context.Background()
 
 		// Pass "." to simulate running from CLI root.
-		stream := streamAllowedFiles(ctx, []string{"."}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{"."}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 		results := collectStream(stream, ".")
 
 		// Assert
@@ -125,7 +152,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 
 		ctx := context.Background()
 
-		stream := streamAllowedFiles(ctx, []string{"."}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{"."}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 		results := collectStream(stream, ".")
 
 		if len(results) != 1 || results[0] != "code.go" {
@@ -143,7 +170,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		dirB := setupTempDir(t, filesB)
 
 		ctx := context.Background()
-		stream := streamAllowedFiles(ctx, []string{dirA, dirB}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{dirA, dirB}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 
 		// Collect results using Base name to ignore path prefix differences.
 		var results []string
@@ -179,7 +206,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		// Input: one directory and one specific file.
 		// Note: Absolute paths used here.
 		inputs := []string{dir1, rootFile}
-		stream := streamAllowedFiles(ctx, inputs, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, inputs, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 
 		var results []string
 		for p := range stream {
@@ -213,7 +240,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		fileB := filepath.Join(rootDir, "fileB.txt")
 
 		ctx := context.Background()
-		stream := streamAllowedFiles(ctx, []string{fileA, fileB}, nil, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{fileA, fileB}, nil, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 
 		var results []string
 		for p := range stream {
@@ -241,7 +268,7 @@ func TestStreamAllowedFiles(t *testing.T) {
 		rootDir := setupTempDir(t, files)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		stream := streamAllowedFiles(ctx, []string{rootDir}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), &logger)
+		stream := streamAllowedFiles(ctx, []string{rootDir}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 		cancel()
 
 		count := 0
@@ -279,7 +306,7 @@ func TestStreamAllowedFiles_Timeout(t *testing.T) {
 
 	logger := zerolog.Nop()
 	start := time.Now()
-	stream := streamAllowedFiles(ctx, []string{rootDir}, nil, getCustomGlobIgnoreRules(), &logger)
+	stream := streamAllowedFiles(ctx, []string{rootDir}, nil, getCustomGlobIgnoreRules(), getTestInvocationContext(t), &logger)
 
 	// Drain the channel
 	count := 0
@@ -304,4 +331,27 @@ func TestStreamAllowedFiles_Timeout(t *testing.T) {
 	if duration > 1*time.Second {
 		t.Errorf("Function took %v to return, expected it to respect the short timeout", duration)
 	}
+}
+
+// TestStreamAllowedFiles_usesTheInvocationContextFileFilter pins that the filter is obtained from the
+// invocation context. Building one directly would still filter, but would silently drop every
+// configuration-gated behavior, and no other test would fail.
+func TestStreamAllowedFiles_usesTheInvocationContextFileFilter(t *testing.T) {
+	logger := zerolog.Nop()
+	config := configuration.NewWithOpts()
+	rootDir := setupTempDir(t, map[string]string{
+		gitIgnoreFile: "*.log\n",
+		"app.js":      "x",
+		"debug.log":   "noise",
+	})
+
+	ictx := mocks.NewMockInvocationContext(gomock.NewController(t))
+	ictx.EXPECT().GetFileFilter(rootDir, gomock.Any()).Times(1).DoAndReturn(getFileFilterFunc(&logger, config))
+
+	var results []string
+	for p := range streamAllowedFiles(context.Background(), []string{rootDir}, []string{gitIgnoreFile}, getCustomGlobIgnoreRules(), ictx, &logger) {
+		results = append(results, filepath.Base(p))
+	}
+
+	assert.Equal(t, []string{"app.js"}, results)
 }

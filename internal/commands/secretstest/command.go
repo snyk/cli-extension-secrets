@@ -158,6 +158,7 @@ func (c *Command) RunWorkflow(
 
 func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (string, error) {
 	instrumentation := cmdctx.Instrumentation(ctx)
+	ictx := cmdctx.Ictx(ctx)
 
 	textFilesFilter := ff.NewPipeline(
 		ff.WithConcurrency(runtime.NumCPU()),
@@ -168,6 +169,7 @@ func (c *Command) filterAndUploadFiles(ctx context.Context, inputPath string) (s
 		),
 		ff.WithLogger(c.Logger),
 		ff.WithAnalytics(instrumentation),
+		ff.WithInvocationContext(ictx),
 	)
 	pathsChan := textFilesFilter.Filter(ctx, []string{inputPath})
 

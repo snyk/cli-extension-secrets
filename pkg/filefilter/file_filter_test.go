@@ -95,6 +95,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithConcurrency(2),
 			WithFilters(exeFilter),
 			WithLogger(&logger),
+			WithInvocationContext(getTestInvocationContext(t)),
 		)
 
 		outChan := pipeline.Filter(t.Context(), inputPaths)
@@ -121,6 +122,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithConcurrency(4),
 			WithFilters(exeFilter, vendorFilter),
 			WithLogger(&logger),
+			WithInvocationContext(getTestInvocationContext(t)),
 		)
 
 		outChan := pipeline.Filter(t.Context(), inputPaths)
@@ -145,6 +147,7 @@ func TestFilter_Logic(t *testing.T) {
 			WithConcurrency(1),
 			WithFilters(exeFilter),
 			WithLogger(&logger),
+			WithInvocationContext(getTestInvocationContext(t)),
 		)
 
 		outChan := pipeline.Filter(t.Context(), []string{})
@@ -160,6 +163,7 @@ func TestFilter_Logic(t *testing.T) {
 		pipeline := NewPipeline(
 			WithConcurrency(2),
 			WithLogger(&logger),
+			WithInvocationContext(getTestInvocationContext(t)),
 		)
 
 		outChan := pipeline.Filter(t.Context(), inputPaths)
@@ -282,6 +286,7 @@ func TestFilter_ConcurrencyStress(t *testing.T) {
 		WithConcurrency(10),
 		WithFilters(passAllFilter),
 		WithLogger(&logger),
+		WithInvocationContext(getTestInvocationContext(t)),
 	)
 
 	outChan := pipeline.Filter(t.Context(), inputPaths)
@@ -376,6 +381,32 @@ func TestFileSizeFilter_Metrics(t *testing.T) {
 			if !tt.nilAnalytics {
 				assert.Equal(t, tt.expectedCount, mock.sizeFilteredCount)
 			}
+		})
+	}
+}
+
+func TestPipeline_withoutAnInvocationContext(t *testing.T) {
+	logger := zerolog.Nop()
+	rootDir := setupTempDir(t, map[string]string{
+		gitIgnoreFile: "*.log\n",
+		"app.js":      "x",
+		"debug.log":   "noise",
+	})
+
+	for _, tc := range []struct {
+		name    string
+		options []Option
+	}{
+		{name: "option passed a nil context", options: []Option{WithLogger(&logger), WithInvocationContext(nil)}},
+		{name: "option never set", options: []Option{WithLogger(&logger)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var results []string
+			for p := range NewPipeline(tc.options...).Filter(t.Context(), []string{rootDir}) {
+				results = append(results, filepath.Base(p))
+			}
+
+			assert.Equal(t, []string{"app.js"}, results)
 		})
 	}
 }

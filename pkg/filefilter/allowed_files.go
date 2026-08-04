@@ -7,6 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/snyk/go-application-framework/pkg/utils"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // streamAllowedFiles iterates over multiple input paths, applies rules from specific
@@ -17,6 +18,7 @@ func streamAllowedFiles(
 	inputPaths []string,
 	ignoreFilenames []string,
 	customGlobPatterns []string,
+	invocationCtx workflow.InvocationContext,
 	logger *zerolog.Logger,
 ) chan string {
 	// Create the merged output channel
@@ -33,8 +35,7 @@ func streamAllowedFiles(
 			}
 
 			maxThreadCount := runtime.NumCPU()
-			// Initialize the file walker/filter
-			filter := utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount))
+			filter := newFileFilter(invocationCtx, rootPath, maxThreadCount, logger)
 
 			// Get rules from the passed filenames
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)
@@ -69,4 +70,15 @@ func streamAllowedFiles(
 		close(mergedFiles)
 	}()
 	return mergedFiles
+}
+
+// newFileFilter builds the file filter from the invocation context when one is supplied, so
+// filtering follows the invocation's configuration, and from defaults otherwise.
+func newFileFilter(invocationCtx workflow.InvocationContext, rootPath string, maxThreadCount int, logger *zerolog.Logger) *utils.FileFilter {
+	if invocationCtx == nil {
+		logger.Debug().Msg("invocation context not supplied; using default file filter configuration")
+		return utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount))
+	}
+
+	return invocationCtx.GetFileFilter(rootPath, utils.WithThreadNumber(maxThreadCount))
 }
