@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 const gitIgnoreFile = ".gitignore"
@@ -33,6 +34,7 @@ type Pipeline struct {
 	filters            []FileFilter
 	customGlobPatterns []string
 	analytics          Analytics
+	invocationCtx      workflow.InvocationContext
 }
 
 // Option defines the functional option type.
@@ -92,11 +94,19 @@ func WithExcludeGlobs(userPatterns []string) Option {
 	}
 }
 
+// WithInvocationContext sets the invocation context the file filter is built from, so filtering
+// follows the invocation's configuration. Without it, filtering falls back to GAF's defaults.
+func WithInvocationContext(invocationCtx workflow.InvocationContext) Option {
+	return func(p *Pipeline) {
+		p.invocationCtx = invocationCtx
+	}
+}
+
 // Filter processes the input channel through the configured filters concurrently.
 // It returns a new channel containing only the files that passed all filters.
 func (p *Pipeline) Filter(ctx context.Context, inputPaths []string) chan string {
 	filterStart := time.Now()
-	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.logger)
+	files := streamAllowedFiles(ctx, inputPaths, ignoreFiles, p.customGlobPatterns, p.invocationCtx, p.logger)
 
 	// Output channel buffer size matches concurrency for optimal flow
 	filteredFiles := make(chan string, p.concurrency)

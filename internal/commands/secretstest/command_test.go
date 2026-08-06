@@ -14,7 +14,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	gafclientmocks "github.com/snyk/go-application-framework/pkg/apiclients/mocks"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
+	"github.com/snyk/go-application-framework/pkg/configuration"
 	"github.com/snyk/go-application-framework/pkg/mocks"
+	"github.com/snyk/go-application-framework/pkg/utils"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 
 	mockupload "github.com/snyk/cli-extension-secrets/internal/clients/upload/mocks"
@@ -37,6 +39,7 @@ func TestCommand_RunWorkflow_Success(t *testing.T) {
 	// Setup test case
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -427,6 +430,7 @@ func TestPrepareOutput_NoReport_ReturnsFindingsInOutput(t *testing.T) {
 	}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
@@ -471,6 +475,7 @@ func TestPrepareOutput_NoReport_ReturnsOutputWithoutReportURL(t *testing.T) {
 	}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
@@ -509,6 +514,7 @@ func TestPrepareOutput_ReportWithProjectPageURL_FindingsWithProjectID_SetsLink(t
 	components := &[]testapi.TestComponent{{ProjectId: &projectID}}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
@@ -545,6 +551,7 @@ func TestPrepareOutput_ReportWithProjectPageURL_NoProjectID_NoLink(t *testing.T)
 	components := &[]testapi.TestComponent{{}}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
@@ -576,6 +583,7 @@ func TestPrepareOutput_ReportWithNilProjectPageURL_NoLink(t *testing.T) {
 	}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 	mockIctx.EXPECT().GetWorkflowIdentifier().Return(&url.URL{})
 
@@ -680,6 +688,7 @@ func TestCommand_RunWorkflow_FailedFileUpload(t *testing.T) {
 
 	mockClients, _, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -696,6 +705,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger(t *testing.T) {
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -716,6 +726,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_ErrOnWait(t *testing.T) {
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -739,6 +750,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_IncompleteFindings(t *testing.T) 
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -766,6 +778,7 @@ func TestCommand_RunWorkflow_FailedTestTrigger_TestExecutionFailed(t *testing.T)
 
 	mockClients, mockUI, cmd := setupTestCommand(t, ctrl)
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -832,6 +845,7 @@ func setupSuccessfulRunWithParamCapture(
 	result := &successfulRunResult{}
 
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
+	expectFileFilter(mockIctx)
 	ctx := cmdctx.WithIctx(t.Context(), mockIctx)
 
 	mockUploadClient := mockClients.FileUpload.(*mockupload.MockClient)
@@ -915,4 +929,20 @@ func setupMockTestResultForPrepareOutput(m *gafclientmocks.MockTestResult) {
 	m.EXPECT().Get(testapi.TestResultTestFacts).Return(nil).AnyTimes()
 	m.EXPECT().Get(testapi.TestResultMetadata).Return(map[string]interface{}{}).AnyTimes()
 	m.EXPECT().GetExecutionState().Return(testapi.TestExecutionStatesFinished).AnyTimes()
+}
+
+// expectFileFilter wires GetFileFilter to build a real FileFilter the way the framework does, so
+// file filtering is exercised rather than stubbed.
+func expectFileFilter(mockIctx *mocks.MockInvocationContext, config ...configuration.Configuration) {
+	logger := zerolog.Nop()
+
+	var cfg configuration.Configuration
+	if len(config) > 0 {
+		cfg = config[0]
+	}
+
+	mockIctx.EXPECT().GetFileFilter(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(path string, options ...utils.FileFilterOption) *utils.FileFilter {
+			return utils.NewFileFilter(path, &logger, append([]utils.FileFilterOption{utils.WithConfig(cfg)}, options...)...)
+		}).AnyTimes()
 }
