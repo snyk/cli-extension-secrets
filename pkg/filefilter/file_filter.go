@@ -11,9 +11,12 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
-const gitIgnoreFile = ".gitignore"
+const (
+	gitIgnoreFile = ".gitignore"
+	dotSnykFile   = ".snyk"
+)
 
-var ignoreFiles = []string{gitIgnoreFile}
+var ignoreFiles = []string{gitIgnoreFile, dotSnykFile}
 
 // FileFilter defines the contract for any logic that decides if a file should be dropped.
 type FileFilter interface {

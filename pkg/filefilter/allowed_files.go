@@ -35,7 +35,15 @@ func streamAllowedFiles(
 			}
 
 			maxThreadCount := runtime.NumCPU()
-			filter := newFileFilter(invocationCtx, rootPath, maxThreadCount, logger)
+
+			// Initialize the file walker/filter, honoring the "global" and "secrets"
+			// sections of any .snyk file (the framework defaults to "global" and "code").
+			filter := newFileFilter(invocationCtx,
+				rootPath,
+				logger,
+				utils.WithThreadNumber(maxThreadCount),
+				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.DotSnykExcludeGlobal, utils.DotSnykExcludeSecrets}),
+			)
 
 			// Get rules from the passed filenames
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)
@@ -74,11 +82,16 @@ func streamAllowedFiles(
 
 // newFileFilter builds the file filter from the invocation context when one is supplied, so
 // filtering follows the invocation's configuration, and from defaults otherwise.
-func newFileFilter(invocationCtx workflow.InvocationContext, rootPath string, maxThreadCount int, logger *zerolog.Logger) *utils.FileFilter {
+func newFileFilter(invocationCtx workflow.InvocationContext, rootPath string, logger *zerolog.Logger, options ...utils.FileFilterOption) *utils.FileFilter {
 	if invocationCtx == nil {
 		logger.Debug().Msg("invocation context not supplied; using default file filter configuration")
-		return utils.NewFileFilter(rootPath, logger, utils.WithThreadNumber(maxThreadCount))
+		return utils.NewFileFilter(
+			rootPath,
+			logger,
+			options...)
 	}
 
-	return invocationCtx.GetFileFilter(rootPath, utils.WithThreadNumber(maxThreadCount))
+	return invocationCtx.GetFileFilter(
+		rootPath,
+		options...)
 }
