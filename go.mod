@@ -8,7 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/rs/zerolog v1.35.1
 	github.com/snyk/error-catalog-golang-public v0.0.0-20260806122555-28dc45bbbde6
-	github.com/snyk/go-application-framework v0.13.0
+	github.com/snyk/go-application-framework v0.14.1
 	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.1
 )
@@ -70,7 +70,7 @@ require (
 	github.com/sergi/go-diff v1.4.0 // indirect
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/snyk/code-client-go v1.31.1 // indirect
-	github.com/snyk/go-httpauth v0.0.0-20231117135515-eb445fea7530 // indirect
+	github.com/snyk/go-httpauth v0.0.0-20260810142636-0f6182aaccbc // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
