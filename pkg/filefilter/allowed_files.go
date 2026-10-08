@@ -2,6 +2,8 @@ package filefilter
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"runtime"
 	"sync"
 
@@ -34,12 +36,14 @@ func streamAllowedFiles(
 				return
 			}
 
+			filterRoot, singleFile := resolveFilterRoot(rootPath, logger)
+
 			maxThreadCount := runtime.NumCPU()
 
 			// Initialize the file walker/filter, honoring the "global" and "secrets"
 			// sections of any .snyk file (the framework defaults to "global" and "code").
 			filter := newFileFilter(invocationCtx,
-				rootPath,
+				filterRoot,
 				logger,
 				utils.WithThreadNumber(maxThreadCount),
 				utils.WithDotSnykSections([]utils.DotSnykExcludeSectionName{utils.DotSnykExcludeGlobal, utils.DotSnykExcludeSecrets}),
@@ -49,7 +53,7 @@ func streamAllowedFiles(
 			foundIgnoreRules, err := filter.GetRules(ignoreFilenames)
 			if err != nil {
 				// Log and skip this path, but don't crash the whole stream
-				logger.Error().Err(err).Str("path", rootPath).Msg("failed to parse ignore rules, skipping path")
+				logger.Error().Err(err).Str("path", filterRoot).Msg("failed to parse ignore rules, skipping path")
 				return
 			}
 
@@ -63,6 +67,9 @@ func streamAllowedFiles(
 			pathFileStream := filter.GetFilteredFiles(allFiles, localRules)
 
 			for file := range pathFileStream {
+				if singleFile != "" && file != singleFile {
+					continue
+				}
 				select {
 				case mergedFiles <- file:
 				case <-ctx.Done():
@@ -78,6 +85,48 @@ func streamAllowedFiles(
 		close(mergedFiles)
 	}()
 	return mergedFiles
+}
+
+func resolveFilterRoot(inputPath string, logger *zerolog.Logger) (filterRoot string, singleFile string) {
+	info, err := os.Stat(inputPath)
+	if err != nil {
+		logger.Debug().Err(err).Str("path", inputPath).Msg("could not stat input path, using as-is")
+		return inputPath, ""
+	}
+
+	if info.IsDir() {
+		return inputPath, ""
+	}
+
+	abs, err := filepath.Abs(inputPath)
+	if err != nil {
+		logger.Debug().Err(err).Str("path", inputPath).Msg("could not resolve absolute path")
+		return filepath.Dir(inputPath), ""
+	}
+
+	dir := filepath.Dir(abs)
+	root := findAncestorWithIgnoreFiles(dir)
+
+	return root, abs
+}
+
+func findAncestorWithIgnoreFiles(dir string) string {
+	current := dir
+	for {
+		for _, name := range ignoreFiles {
+			if _, err := os.Stat(filepath.Join(current, name)); err == nil {
+				return current
+			}
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+
+	return dir
 }
 
 // newFileFilter builds the file filter from the invocation context when one is supplied, so
