@@ -175,10 +175,12 @@ func newFileFilter(invocationCtx workflow.InvocationContext, rootPath string, lo
 		return utils.NewFileFilter(
 			rootPath,
 			logger,
-			options...)
+			options...,
+		)
 	}
 
 	return invocationCtx.GetFileFilter(
 		rootPath,
-		options...)
+		options...,
+	)
 }
