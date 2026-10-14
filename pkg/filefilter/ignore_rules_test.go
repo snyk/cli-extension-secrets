@@ -16,28 +16,66 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func collect(ch chan string) []string {
+	var out []string
+	for p := range ch {
+		out = append(out, p)
+	}
+	return out
+}
+
 func streamFile(t *testing.T, inputPath string) []string {
 	t.Helper()
 	logger := zerolog.Nop()
 	return collect(streamAllowedFiles(context.Background(), []string{inputPath}, ignoreFiles, nil, getTestInvocationContext(t), &logger))
 }
 
-func TestStreamAllowedFiles_fileInputUsesAncestorRules(t *testing.T) {
+// TestStreamAllowedFiles_fileInput covers single-file scans (onChange events): the rules of every
+// ancestor directory apply, and nothing else does.
+func TestStreamAllowedFiles_fileInput(t *testing.T) {
+	const (
+		dotSnykExcludeFile     = "exclude:\n  global:\n    - secret.txt\n"
+		dotSnykExcludeAnywhere = "exclude:\n  global:\n    - '**/secret.txt'\n"
+	)
+
 	tests := []struct {
 		name      string
 		files     map[string]string
 		inputFile string
 		wantFile  bool
 	}{
+		// .gitignore
+		{
+			name:      "gitignored file at root is excluded",
+			files:     map[string]string{".gitignore": ".env\n", ".env": "x", "main.go": "x"},
+			inputFile: ".env",
+		},
+		{
+			name:      "non-ignored file at root is included",
+			files:     map[string]string{".gitignore": ".env\n", ".env": "x", "main.go": "x"},
+			inputFile: "main.go",
+			wantFile:  true,
+		},
+		{
+			name:      "gitignored file in subdirectory is excluded",
+			files:     map[string]string{".gitignore": ".env\n", "sub/.env": "x", "sub/config.go": "x"},
+			inputFile: "sub/.env",
+		},
+		{
+			name:      "non-ignored file in subdirectory is included",
+			files:     map[string]string{".gitignore": ".env\n", "sub/config.go": "x"},
+			inputFile: "sub/config.go",
+			wantFile:  true,
+		},
+		{
+			name:      "wildcard gitignore pattern excludes file",
+			files:     map[string]string{".gitignore": "*.key\n", "server.key": "x"},
+			inputFile: "server.key",
+		},
 		{
 			name:      "root gitignore applies through an empty nested gitignore",
 			files:     map[string]string{".gitignore": ".env\n", "sub/.gitignore": "", "sub/.env": "x"},
 			inputFile: "sub/.env",
-		},
-		{
-			name:      "root dotsnyk exclude applies through a nested gitignore",
-			files:     map[string]string{".snyk": "exclude:\n  global:\n    - '**/secret.txt'\n", "a/b/.gitignore": "*.log\n", "a/b/secret.txt": "x"},
-			inputFile: "a/b/secret.txt",
 		},
 		{
 			name:      "nested negation overrides the parent rule",
@@ -62,6 +100,66 @@ func TestStreamAllowedFiles_fileInputUsesAncestorRules(t *testing.T) {
 			files:     map[string]string{".git/config": "x"},
 			inputFile: ".git/config",
 		},
+		{
+			name:      "without a git repository every ancestor is considered",
+			files:     map[string]string{".gitignore": "*.log\n", "a/.gitignore": "", "a/b/.gitignore": "", "a/b/c/debug.log": "x"},
+			inputFile: "a/b/c/debug.log",
+		},
+		// .snyk
+		{
+			name:      "dotsnyk global exclude is respected",
+			files:     map[string]string{".snyk": dotSnykExcludeFile, "secret.txt": "x"},
+			inputFile: "secret.txt",
+		},
+		{
+			name:      "file not in any ignore list is included",
+			files:     map[string]string{".gitignore": ".env\n", ".snyk": dotSnykExcludeFile, "ok.txt": "x"},
+			inputFile: "ok.txt",
+			wantFile:  true,
+		},
+		{
+			name:      "root dotsnyk exclude applies through a nested gitignore",
+			files:     map[string]string{".snyk": dotSnykExcludeAnywhere, "a/b/.gitignore": "*.log\n", "a/b/secret.txt": "x"},
+			inputFile: "a/b/secret.txt",
+		},
+		{
+			name:      "root dotsnyk exclude applies without any other ignore file",
+			files:     map[string]string{".snyk": dotSnykExcludeAnywhere, "a/b/c/secret.txt": "x"},
+			inputFile: "a/b/c/secret.txt",
+		},
+		{
+			name:      "nested dotsnyk exclude is relative to its own directory",
+			files:     map[string]string{"sub/.snyk": dotSnykExcludeFile, "sub/secret.txt": "x"},
+			inputFile: "sub/secret.txt",
+		},
+		{
+			name:      "nested dotsnyk exclude does not apply outside its directory",
+			files:     map[string]string{"sub/.snyk": dotSnykExcludeFile, "secret.txt": "x"},
+			inputFile: "secret.txt",
+			wantFile:  true,
+		},
+		{
+			name:      "dotsnyk secrets section is respected",
+			files:     map[string]string{".snyk": "exclude:\n  secrets:\n    - 'fixtures/**'\n", "fixtures/key.txt": "x"},
+			inputFile: "fixtures/key.txt",
+		},
+		{
+			name:      "dotsnyk code section does not apply",
+			files:     map[string]string{".snyk": "exclude:\n  code:\n    - 'c.txt'\n", "c.txt": "x"},
+			inputFile: "c.txt",
+			wantFile:  true,
+		},
+		{
+			name:      "expired dotsnyk exclude does not apply",
+			files:     map[string]string{".snyk": "exclude:\n  global:\n    - old.txt:\n        expires: 2000-01-01\n", "old.txt": "x"},
+			inputFile: "old.txt",
+			wantFile:  true,
+		},
+		{
+			name:      "unexpired dotsnyk exclude applies",
+			files:     map[string]string{".snyk": "exclude:\n  global:\n    - new.txt:\n        expires: 2999-01-01\n", "new.txt": "x"},
+			inputFile: "new.txt",
+		},
 	}
 
 	for _, tt := range tests {
@@ -78,6 +176,34 @@ func TestStreamAllowedFiles_fileInputUsesAncestorRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStreamAllowedFiles_folderInput covers directory scans, which discover ignore files by walking down.
+func TestStreamAllowedFiles_folderInput(t *testing.T) {
+	logger := zerolog.Nop()
+	root := setupTempDir(t, map[string]string{
+		".gitignore":                    ".env\n",
+		".env":                          "x",
+		"main.go":                       "x",
+		"sub/.env":                      "x",
+		"config/.snyk":                  "exclude:\n  global:\n    - nested/app-secrets.env\n",
+		"config/nested/app.env":         "x",
+		"config/nested/app-secrets.env": "x",
+		"nested/app-secrets.env":        "x",
+		"other/nested/app-secrets.env":  "x",
+	})
+
+	got := collect(streamAllowedFiles(context.Background(), []string{root}, ignoreFiles, nil, getTestInvocationContext(t), &logger))
+
+	assert.NotContains(t, got, filepath.Join(root, ".env"))
+	assert.NotContains(t, got, filepath.Join(root, "sub", ".env"))
+	assert.Contains(t, got, filepath.Join(root, "main.go"))
+
+	// A nested .snyk is relative to its own directory: it excludes only config/nested/app-secrets.env.
+	assert.NotContains(t, got, filepath.Join(root, "config", "nested", "app-secrets.env"))
+	assert.Contains(t, got, filepath.Join(root, "config", "nested", "app.env"))
+	assert.Contains(t, got, filepath.Join(root, "nested", "app-secrets.env"))
+	assert.Contains(t, got, filepath.Join(root, "other", "nested", "app-secrets.env"))
 }
 
 func TestStreamAllowedFiles_fileInputStopsAtGitRoot(t *testing.T) {
