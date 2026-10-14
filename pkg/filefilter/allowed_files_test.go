@@ -28,6 +28,7 @@ func getTestInvocationContext(t *testing.T) workflow.InvocationContext {
 
 	mockIctx := mocks.NewMockInvocationContext(gomock.NewController(t))
 	mockIctx.EXPECT().GetFileFilter(gomock.Any(), gomock.Any()).DoAndReturn(getFileFilterFunc(&logger, config)).AnyTimes()
+	mockIctx.EXPECT().GetConfiguration().Return(config).AnyTimes()
 
 	return mockIctx
 }

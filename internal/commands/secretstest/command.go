@@ -292,7 +292,8 @@ func (c *Command) prepareOutput(
 
 	testResultData := ufm.CreateWorkflowDataFromTestResults(
 		ictx.GetWorkflowIdentifier(),
-		[]testapi.TestResult{testResult})
+		[]testapi.TestResult{testResult},
+	)
 
 	if testResultData != nil {
 		outputData = append(outputData, testResultData)

@@ -944,5 +944,6 @@ func expectFileFilter(mockIctx *mocks.MockInvocationContext, config ...configura
 	mockIctx.EXPECT().GetFileFilter(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(path string, options ...utils.FileFilterOption) *utils.FileFilter {
 			return utils.NewFileFilter(path, &logger, append([]utils.FileFilterOption{utils.WithConfig(cfg)}, options...)...)
-		}).AnyTimes()
+		},
+	).AnyTimes()
 }
