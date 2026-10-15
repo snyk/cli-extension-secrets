@@ -73,7 +73,7 @@ func (ef *ErrorFactory) NewOrgResolutionError(err error) error {
 	return ef.ensureCatalogError(err, OrgResolutionMsg)
 }
 
-// NewFeatureNotEnabledError returns an error indicating the feature flag is disabled.
+// NewFeatureNotEnabledError returns an error indicating the feature is disabled.
 func (ef *ErrorFactory) NewFeatureNotEnabledError(msg string) error {
 	return cli_errors.NewFeatureNotEnabledError(msg)
 }

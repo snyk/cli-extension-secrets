@@ -11,15 +11,13 @@ import (
 	"github.com/snyk/cli-extension-secrets/internal/instrumentation"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
-	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // Workflow configuration keys.
 const (
-	FeatureFlagIsSecretsEnabled = "internal_snyk_feature_flag_is_secrets_enabled" //nolint:gosec // config key
 	// SecretsSettingsEnabled resolves to whether the Secrets feature is enabled for
-	// the org, sourced from the REST settings endpoint rather than a feature flag.
+	// the org, sourced from the REST settings endpoint.
 	SecretsSettingsEnabled = "internal_secrets_settings_secrets_enabled" //nolint:gosec // config key
 	InputPathKey           = "inputPath"
 )
@@ -37,8 +35,6 @@ func RegisterWorkflows(e workflow.Engine) error {
 		return fmt.Errorf("error while registering %s workflow: %w", WorkflowID, err)
 	}
 
-	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsSecretsEnabled, "isSecretsEnabled")
-
 	addSecretsSettingsToConfig(e, SecretsSettingsEnabled)
 
 	return nil
@@ -47,8 +43,7 @@ func RegisterWorkflows(e workflow.Engine) error {
 // addSecretsSettingsToConfig registers a lazily-resolved config value that reports
 // whether the Secrets feature is enabled for the org, sourced from the REST
 // settings endpoint (/rest/orgs/{org_id}/settings/secrets). The lookup is performed
-// on first read using an org-scoped network client, mirroring the feature-flag
-// resolution pattern.
+// on first read using an org-scoped network client.
 func addSecretsSettingsToConfig(e workflow.Engine, configKey string) {
 	config := e.GetConfiguration()
 	if err := config.AddKeyDependency(configKey, configuration.ORGANIZATION); err != nil {

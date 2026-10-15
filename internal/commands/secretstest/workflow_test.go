@@ -81,24 +81,20 @@ func TestSecretsWorkflow_OrgResolutionAuthError(t *testing.T) {
 		"an unauthenticated user should get the authentication error, not a generic failure")
 }
 
-func TestSecretsWorkflow_FFEnablesWhenSettingDisabled(t *testing.T) {
+func TestSecretsWorkflow_SettingDisabled(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// The legacy feature flag must still enable the workflow even when the
-	// REST setting reports it disabled (enablement is "FF OR setting"). With a
-	// valid org and the feature flag on, validation should advance past the
-	// enablement gate and fail later (here, on the missing input path).
 	mockConfig := configuration.New()
-	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
-	mockConfig.Set(FeatureFlagIsSecretsEnabled, true)
+	mockOrg := uuid.New().String()
+	mockConfig.Set(configuration.ORGANIZATION, mockOrg)
 	mockConfig.Set(SecretsSettingsEnabled, false)
 	mockIctx := setupMockIctx(ctrl, mockConfig)
 
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
-	assert.Contains(t, catalogErr.Detail, SingleInputPathMsg,
-		"the feature flag should pass the enablement gate even when the setting is disabled")
+	assert.Contains(t, catalogErr.Detail, fmt.Sprintf(FeatureNotEnabledMsg, mockOrg),
+		"the disabled setting should disable secrets scanning")
 }
 
 func TestSecretsWorkflow_OrgNotProvided(t *testing.T) {
