@@ -14,10 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestValidateAndPrepareInput_SecretsEnablement covers the "feature flag OR
-// settings" enablement gate in validateAndPrepareInput: the feature flag can
-// short-circuit to "enabled", otherwise the REST setting is authoritative and
-// its lookup errors are surfaced rather than masked as "feature not enabled".
+// TestValidateAndPrepareInput_SecretsEnablement covers the settings enablement gate in validateAndPrepareInput.
 func TestValidateAndPrepareInput_SecretsEnablement(t *testing.T) {
 	orgID := uuid.New().String()
 
@@ -38,78 +35,34 @@ func TestValidateAndPrepareInput_SecretsEnablement(t *testing.T) {
 		wantDetail  string // expected substring in the catalog error Detail
 	}{
 		{
-			desc: "feature flag enabled, setting disabled -> enabled",
+			desc: "setting enabled -> enabled",
 			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, true)
-				c.Set(SecretsSettingsEnabled, false)
-			},
-			wantEnabled: true,
-		},
-		{
-			desc: "feature flag disabled, setting enabled -> enabled",
-			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, false)
 				c.Set(SecretsSettingsEnabled, true)
 			},
 			wantEnabled: true,
 		},
 		{
-			desc: "feature flag enabled, setting enabled -> enabled",
+			desc: "setting disabled -> not enabled",
 			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, true)
-				c.Set(SecretsSettingsEnabled, true)
-			},
-			wantEnabled: true,
-		},
-		{
-			desc: "feature flag disabled, setting disabled -> not enabled",
-			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, false)
 				c.Set(SecretsSettingsEnabled, false)
 			},
+			wantEnabled: false,
 			wantErrCode: "SNYK-CLI-0016",
 			wantDetail:  fmt.Sprintf(FeatureNotEnabledMsg, orgID),
 		},
 		{
-			desc: "feature flag errors, setting enabled -> enabled (flag error ignored)",
+			desc: "setting errors with auth error -> surfaces auth error",
 			setup: func(c configuration.Configuration) {
-				c.AddDefaultValue(FeatureFlagIsSecretsEnabled, returnErr(authErr))
-				c.Set(SecretsSettingsEnabled, true)
-			},
-			wantEnabled: true,
-		},
-		{
-			desc: "feature flag errors, setting disabled -> not enabled",
-			setup: func(c configuration.Configuration) {
-				c.AddDefaultValue(FeatureFlagIsSecretsEnabled, returnErr(authErr))
-				c.Set(SecretsSettingsEnabled, false)
-			},
-			wantErrCode: "SNYK-CLI-0016",
-			wantDetail:  fmt.Sprintf(FeatureNotEnabledMsg, orgID),
-		},
-		{
-			desc: "feature flag disabled, setting errors with auth error -> surfaces auth error",
-			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, false)
 				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(authErr))
 			},
 			wantErrCode: "SNYK-0005",
 		},
 		{
-			desc: "feature flag disabled, setting errors with generic error -> wrapped check error",
+			desc: "setting errors with generic error -> wrapped check error",
 			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, false)
 				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(errors.New("boom")))
 			},
 			wantDetail: SecretsEnabledCheckMsg,
-		},
-		{
-			desc: "feature flag enabled short-circuits the failing setting lookup -> enabled",
-			setup: func(c configuration.Configuration) {
-				c.Set(FeatureFlagIsSecretsEnabled, true)
-				c.AddDefaultValue(SecretsSettingsEnabled, returnErr(errors.New("boom")))
-			},
-			wantEnabled: true,
 		},
 	}
 
