@@ -19,15 +19,15 @@ as CLI/JSON/SARIF output.
 
 ## Layout
 
-| Path | Contents |
-| --- | --- |
-| `pkg/secrets/` | Public `Init()`. Entry point the Snyk CLI loads. |
-| `pkg/filefilter/` | Public concurrent file-filtering pipeline (size, text-only, glob, `.gitignore`/`.snyk`). |
-| `internal/commands/secretstest/` | The workflow itself: registration, flags, validation, git detection, orchestration, errors, UI. |
-| `internal/commands/cmdctx/` | Typed `context.Context` accessors for the invocation context and instrumentation. |
-| `internal/clients/` | HTTP clients: `upload` (file revisions), `testshim` (test API), `settings` (org Secrets setting), `snykclient` (shared wrapper). |
-| `internal/instrumentation/` | GAF analytics timing/size metrics. |
-| `cmd/develop/` | Local dev runner built on `devtools.Cmd`. |
+| Path                             | Contents                                                                                                                         |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pkg/secrets/`                   | Public `Init()`. Entry point the Snyk CLI loads.                                                                                 |
+| `pkg/filefilter/`                | Public concurrent file-filtering pipeline (size, text-only, glob, `.gitignore`/`.snyk`).                                         |
+| `internal/commands/secretstest/` | The workflow itself: registration, flags, validation, git detection, orchestration, errors, UI.                                  |
+| `internal/commands/cmdctx/`      | Typed `context.Context` accessors for the invocation context and instrumentation.                                                |
+| `internal/clients/`              | HTTP clients: `upload` (file revisions), `testshim` (test API), `settings` (org Secrets setting), `snykclient` (shared wrapper). |
+| `internal/instrumentation/`      | GAF analytics timing/size metrics.                                                                                               |
+| `cmd/develop/`                   | Local dev runner built on `devtools.Cmd`.                                                                                        |
 
 Key files to read first when changing behavior: `internal/commands/secretstest/workflow.go`
 (entry point and config registration) and `internal/commands/secretstest/command.go`

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestValidateAndPrepareInput_SecretsEnablement covers the settings enablement gate in validateAndPrepareInput
+// TestValidateAndPrepareInput_SecretsEnablement covers the settings enablement gate in validateAndPrepareInput.
 func TestValidateAndPrepareInput_SecretsEnablement(t *testing.T) {
 	orgID := uuid.New().String()
 
