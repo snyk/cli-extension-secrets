@@ -2,8 +2,10 @@
 package secretstest
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/snyk/go-application-framework/pkg/ui"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSecretsWorkflow_SettingsDisabled(t *testing.T) {
@@ -32,6 +35,30 @@ func TestSecretsWorkflow_SettingsDisabled(t *testing.T) {
 	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
 	catalogErr := requireCatalogError(t, err)
 	assert.Contains(t, catalogErr.Detail, fmt.Sprintf(FeatureNotEnabledMsg, orgID))
+}
+
+func TestSecretsWorkflow_StopsWhenTheInvocationContextIsCanceled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tmpDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "app.txt"), []byte("hello"), 0o600))
+
+	mockConfig := configuration.New()
+	mockConfig.Set(SecretsSettingsEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{tmpDir})
+	mockConfig.Set(configuration.API_URL, "https://api.example.invalid")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	mockIctx := setupMockIctxWithNetworkAccessAndContext(ctx, ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, context.Canceled,
+		"a workflow whose invocation context is canceled should stop for that reason, not carry on under a context nobody can cancel")
 }
 
 func TestSecretsWorkflow_SettingsResolutionAuthError(t *testing.T) {
@@ -276,12 +303,21 @@ func TestBuildReportConfig_ReportFalse_IgnoresAllFields(t *testing.T) {
 
 // setupMockIctx sets expectations on the mock invocation context when the workflow fails during the validation step.
 func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
+	return setupMockIctxWithContext(context.Background(), ctrl, mockConfig)
+}
+
+func setupMockIctxWithContext(
+	ctx context.Context,
+	ctrl *gomock.Controller,
+	mockConfig configuration.Configuration,
+) *mocks.MockInvocationContext {
 	logger := zerolog.Nop()
 	mockIctx := mocks.NewMockInvocationContext(ctrl)
 	mockUserInterface := mocks.NewMockUserInterface(ctrl)
 	mockProgressBar := mocks.NewMockProgressBar(ctrl)
 	analyticsProvider := analytics.New()
 
+	mockIctx.EXPECT().Context().Return(ctx).AnyTimes()
 	mockIctx.EXPECT().GetConfiguration().Return(mockConfig).AnyTimes()
 	mockIctx.EXPECT().GetEnhancedLogger().Return(&logger).AnyTimes()
 	mockIctx.EXPECT().GetUserInterface().Return(mockUserInterface)
@@ -297,7 +333,15 @@ func setupMockIctx(ctrl *gomock.Controller, mockConfig configuration.Configurati
 }
 
 func setupMockIctxWithNetworkAccess(ctrl *gomock.Controller, mockConfig configuration.Configuration) *mocks.MockInvocationContext {
-	mockIctx := setupMockIctx(ctrl, mockConfig)
+	return setupMockIctxWithNetworkAccessAndContext(context.Background(), ctrl, mockConfig)
+}
+
+func setupMockIctxWithNetworkAccessAndContext(
+	ctx context.Context,
+	ctrl *gomock.Controller,
+	mockConfig configuration.Configuration,
+) *mocks.MockInvocationContext {
+	mockIctx := setupMockIctxWithContext(ctx, ctrl, mockConfig)
 
 	mockNetworkAccess := mocks.NewMockNetworkAccess(ctrl)
 	mockIctx.EXPECT().GetNetworkAccess().Return(mockNetworkAccess).AnyTimes()

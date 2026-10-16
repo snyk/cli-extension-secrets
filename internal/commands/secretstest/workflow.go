@@ -73,8 +73,7 @@ func SecretsWorkflow(
 	ictx workflow.InvocationContext,
 	_ []workflow.Data,
 ) ([]workflow.Data, error) {
-	ctx := context.Background()
-	ctx = cmdctx.WithIctx(ctx, ictx)
+	ctx := cmdctx.WithIctx(ictx.Context(), ictx)
 	ctx = cmdctx.WithInstrumentation(ctx, instrumentation.NewGAFInstrumentation(ictx.GetAnalytics()))
 
 	config := ictx.GetConfiguration()
