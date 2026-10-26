@@ -94,6 +94,17 @@ func SecretsWorkflow(
 		return nil, err
 	}
 
+	if config.GetBool(FlagHistory) {
+		return HistoryWorkflow(ctx, &HistoryArgs{
+			InvocationContext: ictx,
+			UserInterface:     u,
+			GetClient:         NewHistoryClient,
+			ErrorFactory:      errorFactory,
+			OrgID:             orgID,
+			BundlePath:        inputPath,
+		})
+	}
+
 	// identify git root and get repo data if available
 	gitRootDir, err := findGitRoot(inputPath)
 	if err != nil {
