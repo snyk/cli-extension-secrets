@@ -11,11 +11,13 @@ import (
 	"github.com/snyk/cli-extension-secrets/internal/instrumentation"
 
 	"github.com/snyk/go-application-framework/pkg/configuration"
+	"github.com/snyk/go-application-framework/pkg/local_workflows/config_utils"
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
 // Workflow configuration keys.
 const (
+	FeatureFlagIsGitHistoryEnabled = "feature_flag_is_git_history_enabled"
 	// SecretsSettingsEnabled resolves to whether the Secrets feature is enabled for
 	// the org, sourced from the REST settings endpoint.
 	SecretsSettingsEnabled = "internal_secrets_settings_secrets_enabled" //nolint:gosec // config key
@@ -34,6 +36,8 @@ func RegisterWorkflows(e workflow.Engine) error {
 	if _, err := e.Register(WorkflowID, c, SecretsWorkflow); err != nil {
 		return fmt.Errorf("error while registering %s workflow: %w", WorkflowID, err)
 	}
+
+	config_utils.AddFeatureFlagToConfig(e, FeatureFlagIsGitHistoryEnabled, "isGitHistoryEnabled")
 
 	addSecretsSettingsToConfig(e, SecretsSettingsEnabled)
 

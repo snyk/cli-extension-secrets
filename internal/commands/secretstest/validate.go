@@ -427,3 +427,11 @@ func validateOutputPathSafety(rawPath, flagName string) error {
 
 	return nil
 }
+
+func checkGitHistoryEnabled(config configuration.Configuration) error {
+	if !config.GetBool(FeatureFlagIsGitHistoryEnabled) {
+		return cli_errors.NewFeatureUnderDevelopmentError("Git history scanning is not yet supported.")
+	}
+
+	return nil
+}
