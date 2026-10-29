@@ -229,6 +229,41 @@ func TestSecretsWorkflow_NonGitRepo_WithoutReport(t *testing.T) {
 		"target-name should not be set for non-git repo input when --report is not used")
 }
 
+func TestSecretsWorkflow_History_NonGitRepo(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := configuration.New()
+	mockConfig.Set(SecretsSettingsEnabled, true)
+	mockConfig.Set(FeatureFlagIsGitHistoryEnabled, true)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(configuration.INPUT_DIRECTORY, []string{t.TempDir()})
+	mockConfig.Set(FlagGitHistoryScanning, true)
+
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, HistoryRequiresGitMsg)
+}
+
+func TestSecretsWorkflow_History_FeatureFlagOff(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockConfig := configuration.New()
+	mockConfig.Set(SecretsSettingsEnabled, true)
+	mockConfig.Set(FeatureFlagIsGitHistoryEnabled, false)
+	mockConfig.Set(configuration.ORGANIZATION, uuid.New().String())
+	mockConfig.Set(FlagGitHistoryScanning, true)
+
+	mockIctx := setupMockIctx(ctrl, mockConfig)
+
+	_, err := SecretsWorkflow(mockIctx, []workflow.Data{})
+	catalogErr := requireCatalogError(t, err)
+	assert.Contains(t, catalogErr.Detail, "Git history scanning is not yet supported.")
+}
+
 func TestBuildReportConfig_ReportFalse_ReturnsEmptyConfig(t *testing.T) {
 	config := configuration.New()
 
