@@ -80,6 +80,11 @@ func validateAndPrepareInput(
 		return "", "", errorFactory.NewFeatureNotEnabledError(msg)
 	}
 
+	// returned as is: a catalog error must not be wrapped in a generic validation failure
+	if e := checkGitHistoryEnabled(config); e != nil {
+		return "", "", e
+	}
+
 	if e := validateFlagsConfig(config); e != nil {
 		return "", "", errorFactory.NewValidationFailureError(e.Error())
 	}
@@ -133,6 +138,11 @@ This validates config flags that only work together with --report:
 func validateReportConfig(config configuration.Configuration) error {
 	if !config.GetBool(FlagReport) {
 		return validateFlagsWithoutReportConfig(config)
+	}
+
+	// git history scans are stateless, so they cannot be reported
+	if config.GetBool(FlagGitHistoryScanning) {
+		return errors.New(HistoryWithReportMsg)
 	}
 
 	flags := []flagWithOptions{
@@ -428,7 +438,12 @@ func validateOutputPathSafety(rawPath, flagName string) error {
 	return nil
 }
 
+// checkGitHistoryEnabled only gates the --history flag: runs without it never read the feature flag.
 func checkGitHistoryEnabled(config configuration.Configuration) error {
+	if !config.GetBool(FlagGitHistoryScanning) {
+		return nil
+	}
+
 	if !config.GetBool(FeatureFlagIsGitHistoryEnabled) {
 		return cli_errors.NewFeatureUnderDevelopmentError("Git history scanning is not yet supported.")
 	}

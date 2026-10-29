@@ -22,6 +22,9 @@ const (
 	NoOrgProvidedMsg       = "No org provided."
 	SingleInputPathMsg     = "Only one input path is accepted."
 	AbsPathFailureMsg      = "Unable to get absolute path."
+	HistoryRequiresGitMsg  = "--history scans the git history and requires a git repository. " +
+		"Run the command from inside a git repository, or remove --history."
+	HistoryWithReportMsg = "--history cannot be used in combination with the --report option"
 )
 
 // ErrorFactory creates errors for the Secrets extension.

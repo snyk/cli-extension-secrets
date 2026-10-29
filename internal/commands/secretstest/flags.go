@@ -19,6 +19,7 @@ const (
 	FlagProjectLifecycle           = "project-lifecycle"
 	FlagProjectTags                = "project-tags"
 	FlagRemoteRepoURL              = "remote-repo-url"
+	FlagGitHistoryScanning         = "history"
 )
 
 // GetSecretsTestFlagSet returns the flag set for the secrets test command.
@@ -42,6 +43,7 @@ func GetSecretsTestFlagSet() *pflag.FlagSet {
 	flagSet.String(FlagProjectLifecycle, "", "Set the project lifecycle project attribute to one or more values (comma-separated).")
 	flagSet.String(FlagProjectTags, "", "Set the project tags to one or more values (comma-separated key value pairs with an \"=\" separator).")
 	flagSet.String(FlagRemoteRepoURL, "", "Set or override the remote URL for the repository.")
+	flagSet.Bool(FlagGitHistoryScanning, false, "Run the scanner on the repository's full git history.")
 
 	return flagSet
 }
