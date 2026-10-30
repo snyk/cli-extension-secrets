@@ -430,6 +430,21 @@ func TestValidateFlagsConfig(t *testing.T) {
 			hasErr: false,
 			desc:   "valid --target-reference with --report",
 		},
+		{
+			in: map[string]any{
+				FlagGitHistoryScanning: true,
+				FlagReport:             true,
+			},
+			hasErr: true,
+			desc:   "invalid --history with --report",
+		},
+		{
+			in: map[string]any{
+				FlagGitHistoryScanning: true,
+			},
+			hasErr: false,
+			desc:   "valid --history alone",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -441,6 +456,41 @@ func TestValidateFlagsConfig(t *testing.T) {
 				assert.NotNil(t, err)
 			} else {
 				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestCheckGitHistoryEnabled(t *testing.T) {
+	testCases := []struct {
+		in     map[string]any
+		hasErr bool
+		desc   string
+	}{
+		{
+			in:     map[string]any{},
+			hasErr: false,
+			desc:   "no --history -> feature flag is not consulted",
+		},
+		{
+			in:     map[string]any{FlagGitHistoryScanning: true, FeatureFlagIsGitHistoryEnabled: false},
+			hasErr: true,
+			desc:   "--history with feature flag off",
+		},
+		{
+			in:     map[string]any{FlagGitHistoryScanning: true, FeatureFlagIsGitHistoryEnabled: true},
+			hasErr: false,
+			desc:   "--history with feature flag on",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := checkGitHistoryEnabled(setupMockConfig(tc.in))
+			if tc.hasErr {
+				requireCatalogError(t, err)
+			} else {
+				assert.NoError(t, err)
 			}
 		})
 	}

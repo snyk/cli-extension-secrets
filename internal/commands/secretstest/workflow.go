@@ -97,6 +97,12 @@ func SecretsWorkflow(
 	// identify git root and get repo data if available
 	gitRootDir, err := findGitRoot(inputPath)
 	if err != nil {
+		// git history can only be scanned inside a git repo
+		if config.GetBool(FlagGitHistoryScanning) {
+			logger.Err(err).Str(InputPathKey, inputPath).Msg("could not determine common git root for --history")
+			return nil, errorFactory.NewValidationFailureError(HistoryRequiresGitMsg)
+		}
+
 		// if the git root dir is not found it means the dir is not a git repo
 		// in case of --report and no target name already set, we need to manually set the target name to the name of the dir
 		// in order to enable target + project creation
