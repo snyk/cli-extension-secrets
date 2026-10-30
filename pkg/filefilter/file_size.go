@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	_MaxFileSize = 1_000_000 // 1 MB
+	_MaxFileSize = 50_000_000 // 50 MB
 )
 
 type fileSizeFilter struct {
@@ -16,7 +16,7 @@ type fileSizeFilter struct {
 	filteredFiles atomic.Int64
 }
 
-// FileSizeFilter returns a filter that drops empty files and files larger than 1 MB.
+// FileSizeFilter returns a filter that drops empty files and files larger than 50 MB.
 //
 //nolint:ireturn // Returns interface because implementation is private
 func FileSizeFilter(logger *zerolog.Logger) FileFilter {
