@@ -25,6 +25,10 @@ const (
 	HistoryRequiresGitMsg  = "--history scans the git history and requires a git repository. " +
 		"Run the command from inside a git repository, or remove --history."
 	HistoryWithReportMsg = "--history cannot be used in combination with the --report option"
+	GitNotFoundMsg       = "--history requires git, but no git executable was found in your PATH. " +
+		"Install git (https://git-scm.com/downloads) and make sure it is on your PATH, or remove --history."
+	InsufficientDiskSpaceMsg = "Not enough disk space to clone the repository for --history. " +
+		"Free up space on the volume that holds the Snyk cache directory, or point it to a larger volume, and try again."
 )
 
 // ErrorFactory creates errors for the Secrets extension.
@@ -94,6 +98,23 @@ func (ef *ErrorFactory) NewValidationFailureError(msg string) error {
 // NewInvalidFlagError returns an error for an unrecognized or invalid CLI flag.
 func (ef *ErrorFactory) NewInvalidFlagError(err error) error {
 	return cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
+}
+
+// NewGitHistoryError maps git history packaging errors to the appropriate catalog error type.
+func (ef *ErrorFactory) NewGitHistoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, ErrGitNotFound) {
+		return cli_errors.NewValidationFailureError(GitNotFoundMsg, snyk_errors.WithCause(err))
+	}
+
+	if errors.Is(err, ErrInsufficientDiskSpace) {
+		return cli_errors.NewGeneralSecretsFailureError(InsufficientDiskSpaceMsg, snyk_errors.WithCause(err))
+	}
+
+	return ef.ensureCatalogError(err, "error packaging git history")
 }
 
 // NewUploadError maps file-upload errors to the appropriate catalog error type.
