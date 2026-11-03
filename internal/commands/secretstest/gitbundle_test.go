@@ -3,6 +3,7 @@ package secretstest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -71,22 +72,14 @@ func TestCloneRepository_GitNotFound(t *testing.T) {
 	require.ErrorIs(t, err, ErrGitNotFound)
 }
 
-func TestCloneRepository_NoSpaceLeft(t *testing.T) {
-	useFakeGit(t, fakeGitHugeRepoScript)
-
-	_, err := cloneRepository(context.Background(), t.TempDir(), t.TempDir())
-
-	require.ErrorIs(t, err, ErrInsufficientDiskSpace)
-}
-
-func TestCloneRepository_OtherFailureIsNotDiskSpace(t *testing.T) {
+func TestCloneRepository_GitFailure(t *testing.T) {
 	useFakeGit(t, `echo "fatal: repository not found" >&2; exit 128`)
 
 	_, err := cloneRepository(context.Background(), t.TempDir(), t.TempDir())
 
 	require.Error(t, err)
-	assert.NotErrorIs(t, err, ErrInsufficientDiskSpace)
 	assert.NotErrorIs(t, err, ErrGitNotFound)
+	assert.Contains(t, err.Error(), "repository not found")
 }
 
 func TestRepackRepository(t *testing.T) {
@@ -117,7 +110,6 @@ func TestRepackRepository_NotARepository(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrGitNotFound)
-	assert.NotErrorIs(t, err, ErrInsufficientDiskSpace)
 }
 
 func TestRepackRepository_GitNotFound(t *testing.T) {
@@ -126,14 +118,6 @@ func TestRepackRepository_GitNotFound(t *testing.T) {
 	err := repackRepository(context.Background(), t.TempDir())
 
 	require.ErrorIs(t, err, ErrGitNotFound)
-}
-
-func TestRepackRepository_NoSpaceLeft(t *testing.T) {
-	useFakeGit(t, fakeGitHugeRepoScript)
-
-	err := repackRepository(context.Background(), t.TempDir())
-
-	require.ErrorIs(t, err, ErrInsufficientDiskSpace)
 }
 
 func TestCreateBundle(t *testing.T) {
@@ -179,15 +163,6 @@ func TestCreateBundle_EmptyRepository(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotErrorIs(t, err, ErrGitNotFound)
-	assert.NotErrorIs(t, err, ErrInsufficientDiskSpace)
-}
-
-func TestCreateBundle_NoSpaceLeft(t *testing.T) {
-	useFakeGit(t, fakeGitHugeRepoScript)
-
-	_, err := createBundle(context.Background(), t.TempDir(), t.TempDir())
-
-	require.ErrorIs(t, err, ErrInsufficientDiskSpace)
 }
 
 func TestCreateHistoryBundle(t *testing.T) {
@@ -226,12 +201,14 @@ func TestCreateHistoryBundle_FailureKeepsErrorKind(t *testing.T) {
 		require.ErrorIs(t, err, ErrGitNotFound)
 	})
 
-	t.Run("not enough disk space", func(t *testing.T) {
-		useFakeGit(t, fakeGitHugeRepoScript)
+	t.Run("git command fails", func(t *testing.T) {
+		useFakeGit(t, `echo "fatal: something went wrong" >&2; exit 128`)
 
 		_, err := c.createHistoryBundle(context.Background(), t.TempDir())
 
-		require.ErrorIs(t, err, ErrInsufficientDiskSpace)
+		require.Error(t, err)
+		assert.NotErrorIs(t, err, ErrGitNotFound)
+		assert.Contains(t, err.Error(), "something went wrong")
 	})
 }
 
@@ -246,8 +223,8 @@ func TestNewGitHistoryError(t *testing.T) {
 		wantDetail string
 	}{
 		{name: "git not found", in: ErrGitNotFound, wantCode: "SNYK-CLI-0010", wantDetail: GitNotFoundMsg},
-		{name: "no disk space", in: ErrInsufficientDiskSpace, wantCode: "SNYK-CLI-0023", wantDetail: InsufficientDiskSpaceMsg},
-		{name: "other", in: errors.New("boom"), wantCode: "SNYK-CLI-0023"},
+		{name: "git command failure", in: errors.New("git clone failed: boom"), wantCode: "SNYK-SECRETS-0004", wantDetail: "git clone failed: boom"},
+		{name: "wrapped git command failure", in: fmt.Errorf("packaging: %w", errors.New("boom")), wantCode: "SNYK-SECRETS-0004", wantDetail: "packaging: boom"},
 	}
 
 	for _, tt := range tests {

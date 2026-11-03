@@ -15,8 +15,6 @@ import (
 var (
 	// ErrGitNotFound means the git binary is not available on the PATH.
 	ErrGitNotFound = errors.New("git executable not found")
-	// ErrInsufficientDiskSpace means there is not enough disk space to clone the repository.
-	ErrInsufficientDiskSpace = errors.New("not enough disk space")
 )
 
 const (
@@ -52,8 +50,7 @@ func gitSubcommand(args []string) string {
 }
 
 // captureGit runs git with the given arguments and returns its combined output.
-// A missing git binary is reported as ErrGitNotFound. Failures are not classified any further here,
-// see diagnoseDiskSpace.
+// A missing git binary is reported as ErrGitNotFound.
 func captureGit(ctx context.Context, args ...string) (string, error) {
 	gitPath, err := exec.LookPath(gitBinaryName)
 	if err != nil {
@@ -83,7 +80,7 @@ func cloneRepository(ctx context.Context, repoSrc, workDir string) (string, erro
 	repoCloneDir := filepath.Join(workDir, repoCloneDirName)
 
 	if err := runGit(ctx, gitCloneCmd, "--mirror", "--no-local", "--", repoSrc, repoCloneDir); err != nil {
-		return "", diagnoseDiskSpace(ctx, err, repoSrc, workDir)
+		return "", err
 	}
 
 	return repoCloneDir, nil
@@ -93,7 +90,7 @@ func cloneRepository(ctx context.Context, repoSrc, workDir string) (string, erro
 func repackRepository(ctx context.Context, repoDir string) error {
 	err := runGit(ctx, "-C", repoDir, "repack", "-adf", repackWindow, repackDepth)
 
-	return diagnoseDiskSpace(ctx, err, repoDir, filepath.Dir(repoDir))
+	return err
 }
 
 // createBundle packages the whole history of the repository at repoDir into a single bundle file
@@ -102,7 +99,7 @@ func createBundle(ctx context.Context, repoDir, workDir string) (string, error) 
 	bundlePath := filepath.Join(workDir, bundleFileName)
 
 	if err := runGit(ctx, "-C", repoDir, gitBundleCmd, "create", bundlePath, allRefsFlag); err != nil {
-		return "", diagnoseDiskSpace(ctx, err, repoDir, workDir)
+		return "", err
 	}
 
 	return bundlePath, nil

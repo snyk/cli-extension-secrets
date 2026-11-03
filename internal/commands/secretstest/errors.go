@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	secrets_errors "github.com/snyk/error-catalog-golang-public/secrets"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	upload_errors "github.com/snyk/error-catalog-golang-public/uploadrevision"
 
@@ -27,8 +28,6 @@ const (
 	HistoryWithReportMsg = "--history cannot be used in combination with the --report option"
 	GitNotFoundMsg       = "--history requires git, but no git executable was found in your PATH. " +
 		"Install git (https://git-scm.com/downloads) and make sure it is on your PATH, or remove --history."
-	InsufficientDiskSpaceMsg = "Not enough disk space to clone the repository for --history. " +
-		"Free up space on the volume that holds the Snyk cache directory, or point it to a larger volume, and try again."
 )
 
 // ErrorFactory creates errors for the Secrets extension.
@@ -110,11 +109,7 @@ func (ef *ErrorFactory) NewGitHistoryError(err error) error {
 		return cli_errors.NewValidationFailureError(GitNotFoundMsg, snyk_errors.WithCause(err))
 	}
 
-	if errors.Is(err, ErrInsufficientDiskSpace) {
-		return cli_errors.NewGeneralSecretsFailureError(InsufficientDiskSpaceMsg, snyk_errors.WithCause(err))
-	}
-
-	return ef.ensureCatalogError(err, "error packaging git history")
+	return secrets_errors.NewGitHistoryPrerequisiteError(err.Error(), snyk_errors.WithCause(err))
 }
 
 // NewUploadError maps file-upload errors to the appropriate catalog error type.
