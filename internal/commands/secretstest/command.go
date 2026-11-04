@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -49,6 +50,7 @@ type CommandArgs struct {
 	GetClients        newClientsFunc
 	OrgID             string
 	RootFolderID      string
+	GitRootDir        string
 	RepoURL           string
 	Branch            string
 	CommitRef         string
@@ -63,6 +65,7 @@ type Command struct {
 	Logger            *zerolog.Logger
 	OrgID             string
 	RootFolderID      string
+	GitRootDir        string
 	RepoURL           string
 	Branch            string
 	CommitRef         string
@@ -123,6 +126,7 @@ func NewCommand(args *CommandArgs) (*Command, error) {
 		Branch:            args.Branch,
 		CommitRef:         args.CommitRef,
 		RootFolderID:      args.RootFolderID,
+		GitRootDir:        args.GitRootDir,
 		ErrorFactory:      args.ErrorFactory,
 		UserInterface:     args.UserInterface,
 		Excludes:          args.Excludes,
@@ -413,4 +417,34 @@ func retrieveProjectID(testResult testapi.TestResult, logger *zerolog.Logger) *u
 
 	id := *first.ProjectId
 	return &id
+}
+
+// RunGitHistoryWorkflow packages the repository's full git history and scans it.
+func (c *Command) RunGitHistoryWorkflow(
+	ctx context.Context,
+) ([]workflow.Data, error) {
+	config := cmdctx.Ictx(ctx).GetConfiguration()
+
+	// make the bare clone of the repository into a tmp dir
+	workDir, err := createHistoryTempDir(config)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if rmErr := os.RemoveAll(workDir); rmErr != nil {
+			c.Logger.Warn().Err(rmErr).Msg("could not remove git history temp dir")
+		}
+	}()
+
+	bundlePath, err := c.createHistoryBundle(ctx, workDir)
+	if err != nil {
+		return nil, c.ErrorFactory.NewGitHistoryError(err)
+	}
+	c.Logger.Debug().Str("bundlePath", bundlePath).Msg("created git bundle")
+
+	// trigger scan
+
+	// prepare output
+
+	return nil, nil
 }

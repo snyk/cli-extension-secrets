@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 	cli_errors "github.com/snyk/error-catalog-golang-public/cli"
+	secrets_errors "github.com/snyk/error-catalog-golang-public/secrets"
 	"github.com/snyk/error-catalog-golang-public/snyk_errors"
 	upload_errors "github.com/snyk/error-catalog-golang-public/uploadrevision"
 
@@ -25,6 +26,8 @@ const (
 	HistoryRequiresGitMsg  = "--history scans the git history and requires a git repository. " +
 		"Run the command from inside a git repository, or remove --history."
 	HistoryWithReportMsg = "--history cannot be used in combination with the --report option"
+	GitNotFoundMsg       = "--history requires git, but no git executable was found in your PATH. " +
+		"Install git (https://git-scm.com/downloads) and make sure it is on your PATH, or remove --history."
 )
 
 // ErrorFactory creates errors for the Secrets extension.
@@ -94,6 +97,19 @@ func (ef *ErrorFactory) NewValidationFailureError(msg string) error {
 // NewInvalidFlagError returns an error for an unrecognized or invalid CLI flag.
 func (ef *ErrorFactory) NewInvalidFlagError(err error) error {
 	return cli_errors.NewInvalidFlagOptionError(err.Error(), snyk_errors.WithCause(err))
+}
+
+// NewGitHistoryError maps git history packaging errors to the appropriate catalog error type.
+func (ef *ErrorFactory) NewGitHistoryError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if errors.Is(err, ErrGitNotFound) {
+		return cli_errors.NewValidationFailureError(GitNotFoundMsg, snyk_errors.WithCause(err))
+	}
+
+	return secrets_errors.NewGitHistoryPrerequisiteError(err.Error(), snyk_errors.WithCause(err))
 }
 
 // NewUploadError maps file-upload errors to the appropriate catalog error type.

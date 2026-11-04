@@ -130,6 +130,7 @@ func SecretsWorkflow(
 		UserInterface:     u,
 		OrgID:             orgID,
 		RootFolderID:      repoContext.inputPathRelativeToGitRoot,
+		GitRootDir:        repoContext.gitRootDir,
 		RepoURL:           repoContext.repoURL,
 		Branch:            repoContext.branch,
 		CommitRef:         repoContext.commitRef,
@@ -142,6 +143,16 @@ func SecretsWorkflow(
 	c, err := NewCommand(args)
 	if err != nil {
 		return nil, errorFactory.NewGeneralSecretsFailureError(err, UnableToInitializeMsg)
+	}
+
+	if config.GetBool(FlagGitHistoryScanning) {
+		logger.Info().Str(InputPathKey, inputPath).Msg("Running secrets git history workflow...")
+		output, err := c.RunGitHistoryWorkflow(ctx)
+		if err != nil {
+			return nil, errorFactory.NewGeneralSecretsFailureError(err, UnexpectedErrorMsg)
+		}
+
+		return output, nil
 	}
 
 	logger.Info().Str(InputPathKey, inputPath).Msg("Running secrets workflow...")
