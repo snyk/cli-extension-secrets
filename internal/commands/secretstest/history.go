@@ -32,11 +32,13 @@ type HistoryArgs struct {
 	UserInterface     UserInterface
 	GetClient         newLargeFileClientFunc
 	ErrorFactory      *ErrorFactory
-	OrgID             string
-	BundlePath        string
+	// Scanner triggers the scan of the uploaded revision and formats its results.
+	Scanner    *Command
+	OrgID      string
+	BundlePath string
 }
 
-// HistoryWorkflow uploads the git bundle at args.BundlePath as a new revision and reports the revision ID.
+// HistoryWorkflow uploads the git bundle at args.BundlePath as a new revision, scans it and returns the formatted results.
 func HistoryWorkflow(ctx context.Context, args *HistoryArgs) ([]workflow.Data, error) {
 	logger := args.InvocationContext.GetEnhancedLogger()
 
@@ -67,10 +69,22 @@ func HistoryWorkflow(ctx context.Context, args *HistoryArgs) ([]workflow.Data, e
 		Int("parts", result.ChunkCount).
 		Msg("Uploaded git bundle")
 
-	output := workflow.NewData(
-		workflow.NewTypeIdentifier(args.InvocationContext.GetWorkflowIdentifier(), "history"),
-		"text/plain",
-		[]byte(result.RevisionID.String()+"\n"),
-	)
-	return []workflow.Data{output}, nil
+	// Print the revision ID so it can be reused even if the scan fails.
+	if err = args.InvocationContext.GetUserInterface().Output(fmt.Sprintf("Revision ID: %s\n", result.RevisionID)); err != nil {
+		logger.Err(err).Msg("Failed to print revision ID")
+	}
+
+	args.UserInterface.SetTitle(TitleScanning)
+	testResult, err := args.Scanner.triggerScan(ctx, result.RevisionID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	args.UserInterface.SetTitle(TitleRetrievingResults)
+	output, err := args.Scanner.prepareOutput(ctx, testResult)
+	if err != nil {
+		return nil, args.ErrorFactory.NewPrepareOutputError(err)
+	}
+
+	return output, nil
 }

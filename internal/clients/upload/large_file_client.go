@@ -10,6 +10,9 @@ import (
 	"github.com/snyk/go-application-framework/pkg/workflow"
 )
 
+// HistoryDir is the directory the uploaded git bundle chunks are wrapped in.
+const HistoryDir = "__history__"
+
 // LargeFileClient defines the interface for uploading a single file that exceeds the per-file size limit.
 type LargeFileClient interface {
 	// TODO do we need the baseDir here
@@ -28,5 +31,7 @@ func NewLargeFileClient(ictx workflow.InvocationContext, orgID string) (*LargeFi
 	baseURL := config.GetString(configuration.API_URL)
 	cfg := fileupload.Config{BaseURL: baseURL, OrgID: uuid.MustParse(orgID)}
 
-	return &LargeFileUploadClient{fileupload.NewLargeFileClient(httpClient, cfg)}, nil
+	wrapInHistoryDir := fileupload.WithPathEncoder(func(path string) string { return HistoryDir + "/" + path })
+
+	return &LargeFileUploadClient{fileupload.NewLargeFileClient(httpClient, cfg, wrapInHistoryDir)}, nil
 }
