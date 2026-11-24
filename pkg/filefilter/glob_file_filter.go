@@ -8,88 +8,79 @@ import (
 // ErrPathNotAllowed is returned when an exclude rule contains a path separator.
 var ErrPathNotAllowed = errors.New("paths are not allowed in exclude rules")
 
+// ignoredExtensionsGlob lists file extensions that are never useful for secrets scanning
+// (media, fonts, archives, binaries, etc.).
 var ignoredExtensionsGlob = []string{
-	"*.bmp", "*.dcm", "*.gif", "*.iff",
-	"*.jpg", "*.jpeg", "*.pbm", "*.pict",
-	"*.pic", "*.pct", "*.pcx", "*.png",
-	"*.psb", "*.psd", "*.pxr", "*.raw",
-	"*.tga", "*.tiff", "*.svg",
+	// Media file extensions.
+	"*.jpg", "*.jpeg", "*.png", "*.gif", "*.bmp", "*.tiff",
+	"*.tif", "*.ico", "*.svg", "*.webp", "*.psd", "*.psb",
+	"*.pxr", "*.xcf", "*.heic", "*.heif", "*.avif", "*.ai",
+	"*.cr2", "*.nef", "*.orf", "*.dwg", "*.dxf", "*.dcm",
+	"*.iff", "*.pbm", "*.pict", "*.pic", "*.pct", "*.pcx",
+	"*.raw", "*.tga",
+	// Audio/video.
+	"*.mp3", "*.wav", "*.aac", "*.flac", "*.ogg", "*.m4a",
+	"*.wma", "*.mp4", "*.mov", "*.avi", "*.mkv", "*.webm",
+	"*.flv", "*.wmv",
+	// Fonts.
+	"*.ttf", "*.otf", "*.woff", "*.woff2", "*.eot",
+	// Generated files.
+	"*.map", "*.min.css",
+	// Crash data.
+	"*.dmp", "*.stackdump",
+	// Python/Ruby/Java compiled or serialized artifacts.
+	"*.pyc", "*.pyo", "*.npy", "*.npz", "*.pkl", "*.gem", "*.class",
+	// Signature files.
+	"*.md5", "*.sha1", "*.sha256", "*.sha512",
+	// Compressed files. Update once we add support for scanning archives.
+	"*.zip", "*.tar", "*.gz", "*.tgz", "*.rar", "*.7z",
+	"*.bz2", "*.xz", "*.zst", "*.iso", "*.cab", "*.jar",
+	"*.war", "*.ear",
+	// Binaries. Update once we add support for scanning binaries.
+	"*.pdf", "*.epub", "*.mobi", "*.wasm", "*.exe", "*.dll",
+	"*.so", "*.dylib", "*.bin", "*.elf",
 }
 
+// ignoreGenericFilesGlob lists specific file names and directories (lockfiles, vendored
+// dependencies, tooling metadata) that are never useful for secrets scanning.
 var ignoreGenericFilesGlob = []string{
-	// Go Modules & Build
-	"go.mod",
-	"go.sum",
-	"go.work",
-	"go.work.sum",
-	// Go Vendor
-	"vendor/modules.txt",
-	"vendor/github.com/",
-	"vendor/golang.org/x/",
-	"vendor/google.golang.org/",
-	"vendor/gopkg.in/",
-	"vendor/istio.io/",
-	"vendor/k8s.io/",
-	"vendor/sigs.k8s.io/",
-	// Node/JavaScript/General Web
-	"node_modules/",
-	"bower_components/",
-	// Lockfiles
-	"deno.lock",
-	"npm-shrinkwrap.json",
-	"package-lock.json",
-	"pnpm-lock.yaml",
-	"yarn.lock",
-	// Vendored JS Libraries
-	"angular*.js",
-	"angular*.js.map",
-	"bootstrap*.js",
-	"bootstrap*.js.map",
-	// Covers jquery and jquery-ui
-	"jquery*.js",
-	"jquery*.js.map",
-	"plotly*.js",
-	"plotly*.js.map",
-	// Covers swagger-ui and swaggerui
-	"swagger-ui*.js",
-	"swagger-ui*.js.map",
-	// Python Lockfiles
-	"Pipfile.lock",
-	"poetry.lock",
-	// Virtual Envs
-	"venv/lib/",
-	"venv/lib64/",
-	"env/lib/",
-	"env/lib64/",
-	"virtualenv/lib/",
-	"virtualenv/lib64/",
-	// System Libs
-	"lib/python*/",
-	"lib64/python*/",
-	"python/*/lib/",
-	"python/*/lib64/",
-	// Dist Info
-	"*.dist-info/",
-	// Ruby
-	"vendor/bundle/",
-	"vendor/ruby/",
-	"*.gem",
-	// Java/Gradle/Maven
-	"gradle.lockfile",
-	"gradlew",
-	"gradlew.bat",
-	"mvnw",
-	"mvnw.cmd",
-	".mvn/wrapper/MavenWrapperDownloader.java",
-	"verification-metadata.xml",
-	// Configs & Metadata
-	".git/",
-	".gitleaks/",
-	gitIgnoreFile,
-	"gitleaks.toml",
-	".gitleaksignore",
-	"javascript.json",
-	"Database.refactorlog",
+	// Generated files.
+	"javascript.json", "Database.refactorlog",
+	// Filesystem files.
+	".DS_Store", "Thumbs.db",
+	// Node/JavaScript.
+	"node_modules/", "bower_components/", "package-lock.json", "yarn.lock",
+	"pnpm-lock.yaml", "npm-shrinkwrap.json", "bun.lockb", "bun.lock", "deno.lock",
+	"angular*.js", "angular*.js.map", "bootstrap*.js", "bootstrap*.js.map",
+	"jquery*.js", "jquery*.js.map", "plotly*.js", "plotly*.js.map",
+	"swagger-ui*.js", "swagger-ui*.js.map",
+	// Python.
+	"poetry.lock", "Pipfile.lock", "uv.lock",
+	"venv/lib/", "venv/lib64/", "env/lib/", "env/lib64/",
+	"virtualenv/lib/", "virtualenv/lib64/", "lib/python*/", "lib64/python*/",
+	"python/*/lib/", "python/*/lib64/", "*.dist-info/",
+	// PHP.
+	"composer.lock",
+	// Go.
+	"go.mod", "go.sum", "go.work", "go.work.sum", "Gopkg.lock", "glide.lock",
+	"vendor/modules.txt", "vendor/github.com/", "vendor/golang.org/x/",
+	"vendor/google.golang.org/", "vendor/gopkg.in/", "vendor/istio.io/",
+	"vendor/k8s.io/", "vendor/sigs.k8s.io/",
+	// Rust.
+	"Cargo.lock",
+	// Dart/Flutter.
+	"pubspec.lock",
+	// Elixir.
+	"mix.lock",
+	// Ruby.
+	"Gemfile.lock", "vendor/bundle/", "vendor/ruby/",
+	// Java/Gradle/Maven.
+	"gradle.lockfile", "verification-metadata.xml", "gradlew",
+	"gradlew.bat", "mvnw", "mvnw.cmd", ".mvn/wrapper/MavenWrapperDownloader.java",
+	// Terraform.
+	".terraform.lock.hcl",
+	// Git related.
+	".git/", ".gitleaks/", gitIgnoreFile, "gitleaks.toml", ".gitleaksignore", "LICENSE",
 }
 
 func getCustomGlobIgnoreRules() []string {
