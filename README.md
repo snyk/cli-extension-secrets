@@ -17,6 +17,7 @@ This module implements the Snyk CLI Extension for Secrets workflows.
 You can exclude files or directories from secrets scans using the `--exclude` flag. This performs **basename matching**, excluding the specified names anywhere they appear in the project tree.
 
 **Note: Paths containing slashes (`/` or `\`) are not allowed.**
+**Note: `--exclude` cannot be combined with `--history`.**
 
 ```bash
 snyk secrets test --exclude=node_modules,config.json

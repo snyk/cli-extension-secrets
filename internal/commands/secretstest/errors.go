@@ -25,8 +25,9 @@ const (
 	AbsPathFailureMsg      = "Unable to get absolute path."
 	HistoryRequiresGitMsg  = "--history scans the git history and requires a git repository. " +
 		"Run the command from inside a git repository, or remove --history."
-	HistoryWithReportMsg = "--history cannot be used in combination with the --report option"
-	GitNotFoundMsg       = "--history requires git, but no git executable was found in your PATH. " +
+	HistoryWithReportMsg  = "--history cannot be used in combination with the --report option"
+	HistoryWithExcludeMsg = "--history cannot be used in combination with the --exclude option"
+	GitNotFoundMsg        = "--history requires git, but no git executable was found in your PATH. " +
 		"Install git (https://git-scm.com/downloads) and make sure it is on your PATH, or remove --history."
 )
 

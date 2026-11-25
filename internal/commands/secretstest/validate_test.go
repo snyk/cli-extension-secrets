@@ -383,6 +383,7 @@ func TestValidateFlagsConfig(t *testing.T) {
 	testCases := []struct {
 		in     map[string]any
 		hasErr bool
+		errMsg string
 		desc   string
 	}{
 		{
@@ -445,6 +446,22 @@ func TestValidateFlagsConfig(t *testing.T) {
 			hasErr: false,
 			desc:   "valid --history alone",
 		},
+		{
+			in: map[string]any{
+				FlagGitHistoryScanning: true,
+				FlagExcludeFilePath:    "node_modules",
+			},
+			hasErr: true,
+			errMsg: HistoryWithExcludeMsg,
+			desc:   "invalid --history with --exclude",
+		},
+		{
+			in: map[string]any{
+				FlagExcludeFilePath: "node_modules",
+			},
+			hasErr: false,
+			desc:   "valid --exclude without --history",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -454,6 +471,9 @@ func TestValidateFlagsConfig(t *testing.T) {
 			err := validateFlagsConfig(config)
 			if tc.hasErr {
 				assert.NotNil(t, err)
+				if tc.errMsg != "" {
+					assert.EqualError(t, err, tc.errMsg)
+				}
 			} else {
 				assert.Nil(t, err)
 			}
