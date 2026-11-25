@@ -68,6 +68,7 @@ func TestFilter_Logic(t *testing.T) {
 		"keep_me_too.go":     "test content",
 		gitIgnoreFile:        "test content",
 		".gitleaksignore":    "test content",
+		".betterleaksignore": "test content",
 	}
 	dirPath := setupTempDir(t, inputFiles)
 	var inputPaths []string
@@ -171,7 +172,7 @@ func TestFilter_Logic(t *testing.T) {
 
 		sortStrings(results)
 
-		// 6 inputs; default globs drop .gitignore, .gitleaksignore, and *.exe.
+		// 7 inputs; default globs drop .gitignore, .gitleaksignore, .betterleaksignore, and *.exe.
 		if len(results) != 3 {
 			t.Fatalf("got %d files, want 3. Results: %v", len(results), results)
 		}
