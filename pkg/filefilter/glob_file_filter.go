@@ -80,7 +80,7 @@ var ignoreGenericFilesGlob = []string{
 	// Terraform.
 	".terraform.lock.hcl",
 	// Git related.
-	".git/", ".gitleaks/", gitIgnoreFile, "gitleaks.toml", ".gitleaksignore", "LICENSE",
+	".git/", ".gitleaks/", gitIgnoreFile, "gitleaks.toml", ".gitleaksignore", ".betterleaksignore", "LICENSE",
 }
 
 func getCustomGlobIgnoreRules() []string {
