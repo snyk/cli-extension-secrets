@@ -22,12 +22,14 @@ type FileUploadClient struct {
 }
 
 // NewClient creates a new FileUploadClient for the given org.
-func NewClient(ictx workflow.InvocationContext, orgID string) (*FileUploadClient, error) {
+// Any opts are passed to the underlying fileupload client, e.g. fileupload.WithLargeFileUpload(true)
+// to upload files above the size limit in chunks.
+func NewClient(ictx workflow.InvocationContext, orgID string, opts ...fileupload.Option) (*FileUploadClient, error) {
 	config := ictx.GetConfiguration()
 	httpClient := ictx.GetNetworkAccess().GetHttpClient()
 	baseURL := config.GetString(configuration.API_URL)
 	cfg := fileupload.Config{BaseURL: baseURL, OrgID: uuid.MustParse(orgID)}
 
-	uploadClient := fileupload.NewClient(httpClient, cfg)
+	uploadClient := fileupload.NewClient(httpClient, cfg, opts...)
 	return &FileUploadClient{uploadClient}, nil
 }
