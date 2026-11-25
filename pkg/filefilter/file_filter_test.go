@@ -171,13 +171,12 @@ func TestFilter_Logic(t *testing.T) {
 
 		sortStrings(results)
 
-		// Expects 4 files (6 total inputs - 2 implicit drop)
-		if len(results) != 4 {
-			t.Fatalf("got %d files, want 4. Results: %v", len(results), results)
+		// 6 inputs; default globs drop .gitignore, .gitleaksignore, and *.exe.
+		if len(results) != 3 {
+			t.Fatalf("got %d files, want 3. Results: %v", len(results), results)
 		}
 
 		expected := []string{
-			filepath.Join(dirPath, "drop_binary.exe"),
 			filepath.Join(dirPath, "drop_vendor", "lib.js"),
 			filepath.Join(dirPath, "keep_me.txt"),
 			filepath.Join(dirPath, "keep_me_too.go"),
