@@ -13,6 +13,9 @@ const (
 	SecretsFileUploadTimeMs string = "fileUploadMs"
 	SecretsFileFilterTimeMs string = "fileFilterMs"
 	SecretsSizeFiltered     string = "sizeFiltered"
+	SecretsGitBundleTimeMs  string = "gitBundleMs"
+	SecretsGitBundleSizeMB  string = "gitBundleMB"
+	SecretsGitHistoryScan   string = "gitHistoryScan"
 )
 
 // Instrumentation defines the interface that we expect for instrumentation objects.
@@ -21,6 +24,9 @@ type Instrumentation interface {
 	RecordAnalysisTimeMs(startTime time.Time)
 	RecordFileUploadTimeMs(startTime time.Time)
 	RecordFileFilterTimeMs(startTime time.Time)
+	RecordGitBundleTimeMs(startTime time.Time)
+	RecordGitBundleSizeMB(sizeBytes int64)
+	RecordGitHistoryScan()
 
 	RecordTime(key string, startTime time.Time)
 }
@@ -58,4 +64,23 @@ func (i *GAFInstrumentation) RecordFileFilterTimeMs(startTime time.Time) {
 // RecordSizeFiltered records the number of files excluded by size filtering.
 func (i *GAFInstrumentation) RecordSizeFiltered(total int) {
 	i.analytics.AddExtensionIntegerValue(SecretsSizeFiltered, total)
+}
+
+// RecordGitBundleTimeMs records the duration of packaging the git history into a bundle.
+func (i *GAFInstrumentation) RecordGitBundleTimeMs(startTime time.Time) {
+	i.RecordTime(SecretsGitBundleTimeMs, startTime)
+}
+
+// RecordGitBundleSizeMB records the size of the git history bundle in megabytes, given its size in bytes.
+// The value is rounded up, so a non-empty bundle is never reported as 0.
+func (i *GAFInstrumentation) RecordGitBundleSizeMB(sizeBytes int64) {
+	const bytesPerMB = 1024 * 1024
+	// It rounds up, so a 200 KB bundle shows as 1 MB and is never 0.
+	i.analytics.AddExtensionIntegerValue(SecretsGitBundleSizeMB, int((sizeBytes+bytesPerMB-1)/bytesPerMB))
+}
+
+// RecordGitHistoryScan marks the run as a git history scan, so that its upload and analysis timings
+// can be told apart from those of a regular file scan.
+func (i *GAFInstrumentation) RecordGitHistoryScan() {
+	i.analytics.AddExtensionBoolValue(SecretsGitHistoryScan, true)
 }

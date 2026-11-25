@@ -3,17 +3,20 @@ package secretstest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/rs/zerolog"
+	"github.com/snyk/go-application-framework/pkg/apiclients/fileupload"
 	"github.com/snyk/go-application-framework/pkg/apiclients/testapi"
 	"github.com/snyk/go-application-framework/pkg/utils/ufm"
 	"github.com/snyk/go-application-framework/pkg/workflow"
@@ -26,9 +29,8 @@ import (
 
 // Secrets workflow constants.
 const (
-	FilterAndUploadFilesTimeout = 30 * time.Second
-	LogFieldCount               = "count"
-	ReportURL                   = "report-url"
+	LogFieldCount = "count"
+	ReportURL     = "report-url"
 )
 
 // ReportConfig holds the configuration for the --report flag and related project attributes.
@@ -81,8 +83,9 @@ type newClientsFunc func(workflow.InvocationContext, string) (*WorkflowClients, 
 
 // WorkflowClients groups the API clients used during the secrets workflow.
 type WorkflowClients struct {
-	TestAPIShim testshim.Client
-	FileUpload  upload.Client
+	TestAPIShim       testshim.Client
+	FileUpload        upload.Client
+	HistoryFileUpload upload.Client
 }
 
 // NewWorkflowClients creates the API clients needed for the secrets workflow.
@@ -92,14 +95,21 @@ func NewWorkflowClients(ictx workflow.InvocationContext, orgID string) (*Workflo
 		return nil, fmt.Errorf("failed to create upload client: %w", err)
 	}
 
+	largeFileUpload := fileupload.WithLargeFileUpload(true)
+	largeFileUploadClient, err := upload.NewClient(ictx, orgID, largeFileUpload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create large file upload client: %w", err)
+	}
+
 	testShimClient, err := testshim.NewClient(ictx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create test shim client: %w", err)
 	}
 
 	return &WorkflowClients{
-		TestAPIShim: testShimClient,
-		FileUpload:  uploadClient,
+		TestAPIShim:       testShimClient,
+		FileUpload:        uploadClient,
+		HistoryFileUpload: largeFileUploadClient,
 	}, nil
 }
 
@@ -419,6 +429,39 @@ func retrieveProjectID(testResult testapi.TestResult, logger *zerolog.Logger) *u
 	return &id
 }
 
+// uploadBundlePath uploads the git history bundle as a single (possibly large) file and returns the revision ID.
+func (c *Command) uploadBundlePath(ctx context.Context, bundlePath string) (string, error) {
+	instrumentation := cmdctx.Instrumentation(ctx)
+
+	pathsChan := make(chan string, 1)
+	// The upload client opens each path from the filesystem and makes it relative to rootPath, so it must be the full path.
+	pathsChan <- bundlePath
+	close(pathsChan)
+
+	uploadStartTime := time.Now()
+	uploadResult, err := c.Clients.HistoryFileUpload.CreateRevisionFromChan(ctx, pathsChan, filepath.Dir(bundlePath))
+
+	// The bundle is the only file sent, so when it is skipped nothing is uploaded and the upload client returns
+	// fileupload.ErrNoFilesProvided together with the skipped file and its reason.
+	bundleName := filepath.Base(bundlePath)
+	if errors.Is(err, fileupload.ErrNoFilesProvided) {
+		if i := slices.IndexFunc(uploadResult.SkippedFiles, func(f fileupload.SkippedFile) bool {
+			return f.Path == bundleName || f.Path == bundlePath
+		}); i >= 0 {
+			return "", c.ErrorFactory.NewHistoryBundleSkippedError(bundleName, uploadResult.SkippedFiles[i].Reason)
+		}
+	}
+	if err != nil {
+		return "", c.ErrorFactory.NewUploadError(err)
+	}
+
+	if instrumentation != nil {
+		instrumentation.RecordFileUploadTimeMs(uploadStartTime)
+	}
+
+	return uploadResult.RevisionID.String(), nil
+}
+
 // RunGitHistoryWorkflow packages the repository's full git history and scans it.
 func (c *Command) RunGitHistoryWorkflow(
 	ctx context.Context,
@@ -436,15 +479,44 @@ func (c *Command) RunGitHistoryWorkflow(
 		}
 	}()
 
+	instrumentation := cmdctx.Instrumentation(ctx)
+	if instrumentation != nil {
+		instrumentation.RecordGitHistoryScan()
+	}
+	bundleStartTime := time.Now()
 	bundlePath, err := c.createHistoryBundle(ctx, workDir)
 	if err != nil {
 		return nil, c.ErrorFactory.NewGitHistoryError(err)
 	}
+	if instrumentation != nil {
+		instrumentation.RecordGitBundleTimeMs(bundleStartTime)
+		if info, statErr := os.Stat(bundlePath); statErr == nil {
+			instrumentation.RecordGitBundleSizeMB(info.Size())
+		} else {
+			c.Logger.Warn().Err(statErr).Msg("could not determine git bundle size")
+		}
+	}
 	c.Logger.Debug().Str("bundlePath", bundlePath).Msg("created git bundle")
 
-	// trigger scan
+	// upload the bundle
+	revisionID, err := c.uploadBundlePath(ctx, bundlePath)
+	if err != nil {
+		return nil, err
+	}
 
-	// prepare output
+	c.Logger.Debug().Str("revisionID", revisionID).Msg("uploaded git bundle")
 
-	return nil, nil
+	c.UserInterface.SetTitle(TitleScanning)
+	testResult, err := c.triggerScan(ctx, revisionID)
+	if err != nil {
+		return nil, err
+	}
+
+	c.UserInterface.SetTitle(TitleRetrievingResults)
+	output, err := c.prepareOutput(ctx, testResult)
+	if err != nil {
+		return nil, c.ErrorFactory.NewPrepareOutputError(err)
+	}
+
+	return output, nil
 }

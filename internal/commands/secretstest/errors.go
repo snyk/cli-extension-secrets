@@ -152,6 +152,29 @@ func (ef *ErrorFactory) NewUploadError(err error) error {
 	return ef.NewRevisionError(err)
 }
 
+// NewHistoryBundleSkippedError maps the reason the git history bundle was skipped by the upload to a catalog error.
+// Size related reasons become the "too large" errors with history specific wording: the user only provides a directory
+// and the bundle file is created by this extension, so a message about "the file" being too large would not mean
+// anything to them, while one about the repository's git history does.
+// Any other reason, or none, is a generic upload failure.
+func (ef *ErrorFactory) NewHistoryBundleSkippedError(bundleName string, reason error) error {
+	if reason == nil {
+		return ef.NewRevisionError(fmt.Errorf("git history bundle %q was skipped", bundleName))
+	}
+	cause := fmt.Errorf("git history bundle %q was skipped: %w", bundleName, reason)
+
+	var sizeErr *fileupload.FileSizeLimitError
+	var chunkErr *fileupload.ChunkCountLimitError
+	if errors.As(reason, &sizeErr) || errors.As(reason, &chunkErr) {
+		return upload_errors.NewFileTooLargeError(
+			fmt.Sprintf("The git history of this repository is too large to scan: %s.", reason),
+			snyk_errors.WithCause(cause),
+		)
+	}
+
+	return ef.NewRevisionError(cause)
+}
+
 func (ef *ErrorFactory) ensureCatalogError(err error, logMsg string) error {
 	/* Don't wrap an error if is already a presentable snyk_error
 	 * If we wrap a specific error (upload_errors) with a generic one here,
