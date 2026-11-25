@@ -110,6 +110,11 @@ func validateFlagsConfig(config configuration.Configuration) error {
 		return err
 	}
 
+	// git history scans a packed bundle, so local basename excludes do not apply
+	if config.GetBool(FlagGitHistoryScanning) && config.IsSet(FlagExcludeFilePath) {
+		return errors.New(HistoryWithExcludeMsg)
+	}
+
 	if config.IsSet(FlagSeverityThreshold) {
 		flag := flagWithOptions{
 			name:         FlagSeverityThreshold,
